@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  woke-score:
+    # Fuer Portainer "Stacks -> Repository": baut direkt aus diesem Repo.
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Alternative, sobald per GitHub Actions ein Image veroeffentlicht wurde
+    # (siehe .github/workflows/docker-publish.yml) - dann "build:" oben entfernen:
+    # image: ghcr.io/<dein-github-user>/<repo-name>:latest
+    container_name: woke-score
+    restart: unless-stopped
+    ports:
+      - "5005:5005"
+    environment:
+      PLEX_URL: "${PLEX_URL:-}"
+      PLEX_TOKEN: "${PLEX_TOKEN:-}"
+      LIBRARY_SECTIONS: "${LIBRARY_SECTIONS:-Filme,Serien}"
+      BADGE_POSITION: "${BADGE_POSITION:-top-right}"
+    volumes:
+      - woke-score-data:/data
+
+volumes:
+  woke-score-data:

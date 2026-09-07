@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Woke Score</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">WS</span>
+    <span class="brand-name">Woke Score</span>
+  </div>
+  <div class="topbar-actions">
+    <span id="demo-flag" class="demo-flag" style="display:none">Demo-Modus – Plex nicht konfiguriert</span>
+    <button id="btn-rebuild" class="btn btn-ghost">Cache aktualisieren</button>
+    <button id="btn-apply-all" class="btn btn-primary">Alle anwenden</button>
+  </div>
+</header>
+
+<nav class="filterbar">
+  <button class="chip chip-active" data-filter="all">Alle <span class="count" id="count-all">0</span></button>
+  <button class="chip" data-filter="red"><span class="dot dot-red"></span>Rot <span class="count" id="count-red">0</span></button>
+  <button class="chip" data-filter="yellow"><span class="dot dot-yellow"></span>Gelb <span class="count" id="count-yellow">0</span></button>
+  <button class="chip" data-filter="green"><span class="dot dot-green"></span>Grün <span class="count" id="count-green">0</span></button>
+</nav>
+
+<main>
+  <div id="grid" class="grid"></div>
+  <p id="empty-state" class="empty-state" style="display:none">
+    Keine Titel mit Woke-Score gefunden. Cache aktualisieren oder Plex-Zugangsdaten in app.py prüfen.
+  </p>
+</main>
+
+<div id="toast" class="toast" style="display:none">
+  <div class="toast-bar"><div id="toast-bar-fill" class="toast-bar-fill"></div></div>
+  <span id="toast-text">...</span>
+</div>
+
+<script>
+  window.__DEMO__ = {{ demo | tojson }};
+</script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

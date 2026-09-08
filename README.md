@@ -117,6 +117,26 @@ Container-Neustarts/-Updates.
    (z. B. nach einem geänderten Score) immer nur ein Badge sichtbar, statt
    sich mehrere Badges zu überlagern.
 
+### Doppelte Badges nach dem Update auf den Original-Poster-Fix
+
+Vor diesem Fix hat "Anwenden" jedes Mal das *aktuell in Plex ausgewählte*
+Poster als Basis genommen - nach dem ersten Anwenden war das aber schon das
+bebadgte Bild, ein erneutes Anwenden hat also einen zweiten Badge draufgebrannt.
+Seitdem wird stattdessen ein einmalig gesichertes Original verwendet (siehe
+oben) - aber falls das erste Sichern nach dem Update auf ein Poster traf, das
+schon doppelt gebadgt war, bleibt dieser Zustand hartnäckig bestehen. Fix pro
+betroffenem Titel:
+
+1. In Plex das Poster des Titels zurücksetzen (Poster anklicken -> Poster
+   wählen -> Original-/TMDb-Poster auswählen statt des eigenen Uploads).
+2. In der Woke-Score-UI **Poster-Cache zurücksetzen** klicken (löscht die
+   zwischengespeicherten Originale in `/data/originals`).
+3. Den Titel erneut über **Anwenden** badgen - jetzt wird das frisch
+   zurückgesetzte Plex-Poster als neues, sauberes Original übernommen.
+
+**Kompletter Neuaufbau** hilft hier nicht - der bezieht sich nur auf die
+Score-Datenbank (`score_cache.json`), nicht auf die Poster.
+
 ## Eigenes Image bauen und veröffentlichen
 
 Der mitgelieferte Workflow `.github/workflows/docker-publish.yml` baut das

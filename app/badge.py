@@ -42,7 +42,7 @@ def _load_font(size: int):
         return ImageFont.load_default()
 
 
-def add_badge(poster_path: str, score: int, out_path: str, position: str = "top-right"):
+def add_badge(poster_path: str, score: int, out_path: str, position: str = "top-right", label_style: str = "percent"):
     img = Image.open(poster_path).convert("RGBA")
     w, h = img.size
 
@@ -73,9 +73,10 @@ def add_badge(poster_path: str, score: int, out_path: str, position: str = "top-
     color = score_color(score)
     draw.ellipse([x0, y0, x1, y1], fill=color + (255,), outline=(255, 255, 255, 230), width=max(2, diameter // 22))
 
-    # Prozentzahl zentriert
-    text = f"{score}%"
-    font = _load_font(int(diameter * 0.34))
+    # Prozentzahl zentriert - "% woke" ist etwas breiter, Schrift dafuer leicht kleiner
+    text = f"{score}% woke" if label_style == "woke" else f"{score}%"
+    font_scale = 0.24 if label_style == "woke" else 0.34
+    font = _load_font(int(diameter * font_scale))
     bbox = draw.textbbox((0, 0), text, font=font)
     tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
     tx = x0 + (diameter - tw) / 2 - bbox[0]

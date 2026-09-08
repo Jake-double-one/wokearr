@@ -16,6 +16,7 @@
   <div class="topbar-actions">
     <span id="demo-flag" class="demo-flag" style="display:none">Demo-Modus – Plex nicht konfiguriert</span>
     <button id="btn-rebuild" class="btn btn-ghost">Cache aktualisieren</button>
+    <button id="btn-rebuild-full" class="btn btn-ghost" title="Fragt alle Titel erneut ab (dauert deutlich länger)">Kompletter Neuaufbau</button>
     <button id="btn-apply-all" class="btn btn-primary">Alle anwenden</button>
   </div>
 </header>
@@ -46,6 +47,7 @@
 
 <script>
   window.__DEMO__ = {{ demo | tojson }};
+  window.__BADGE_LABEL_STYLE__ = {{ badge_label_style | tojson }};
 </script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>

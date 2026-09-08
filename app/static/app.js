@@ -7,6 +7,10 @@ function scoreBand(score) {
   return "red";
 }
 
+function scoreLabel(score) {
+  return window.__BADGE_LABEL_STYLE__ === "woke" ? `${score}% woke` : `${score}%`;
+}
+
 function render() {
   const grid = document.getElementById("grid");
   const emptyState = document.getElementById("empty-state");
@@ -22,7 +26,7 @@ function render() {
     const sourceUrl = item.sourceUrl || "https://isitwokeornot.com/";
     card.innerHTML = `
       <img src="/api/poster/${item.ratingKey}" alt="${item.title}" loading="lazy">
-      <div class="badge badge-${band}">${item.score}%</div>
+      <div class="badge badge-${band}">${scoreLabel(item.score)}</div>
       <div class="card-overlay">
         <div class="card-title">${item.title}</div>
         <div class="card-year">${item.year || ""}</div>
@@ -105,11 +109,28 @@ async function applyBadges(ratingKeys, btn) {
   if (btn) { btn.textContent = "Erledigt"; }
 }
 
-document.getElementById("btn-rebuild").addEventListener("click", async () => {
-  const res = await fetch("/api/rebuild-cache", { method: "POST" });
+async function triggerRebuild(full) {
+  const res = await fetch("/api/rebuild-cache", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ full }),
+  });
   const data = await res.json();
-  await pollJob(data.job_id, "Cache wird aufgebaut");
+  if (data.error) {
+    showToast(data.error);
+    setTimeout(hideToast, 5000);
+    return;
+  }
+  await pollJob(data.job_id, full ? "Kompletter Neuaufbau" : "Cache wird aufgebaut");
   loadLibrary();
+}
+
+document.getElementById("btn-rebuild").addEventListener("click", () => triggerRebuild(false));
+
+document.getElementById("btn-rebuild-full").addEventListener("click", () => {
+  if (confirm("Kompletten Neuaufbau starten? Das fragt alle Titel erneut ab und dauert deutlich länger als ein normales Update.")) {
+    triggerRebuild(true);
+  }
 });
 
 document.getElementById("btn-apply-all").addEventListener("click", () => {

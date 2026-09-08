@@ -3,21 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Woke Score</title>
+<title>Wokearr</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 
 <header class="topbar">
   <div class="brand">
-    <span class="brand-mark">WS</span>
-    <span class="brand-name">Woke Score</span>
+    <span class="brand-mark">WA</span>
+    <span class="brand-name">Wokearr</span>
   </div>
   <div class="topbar-actions">
     <span id="demo-flag" class="demo-flag" style="display:none">Demo-Modus – Plex nicht konfiguriert</span>
     <button id="btn-rebuild" class="btn btn-ghost">Cache aktualisieren</button>
     <button id="btn-rebuild-full" class="btn btn-ghost" title="Fragt alle Titel erneut ab (dauert deutlich länger)">Kompletter Neuaufbau</button>
-    <button id="btn-reset-originals" class="btn btn-ghost" title="Nur nötig bei doppelten Badges auf Postern (z. B. nach dem Update von vor dem Doppel-Badge-Fix)">Poster-Cache zurücksetzen</button>
     <button id="btn-cleanup-posters" class="btn btn-ghost" title="Löscht alte, selbst hochgeladene Poster-Versionen in Plex (Poster-Historie), die sich über die Zeit ansammeln">Alte Poster in Plex löschen</button>
     <button id="btn-apply-all" class="btn btn-primary">Alle anwenden</button>
   </div>

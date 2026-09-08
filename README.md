@@ -1,4 +1,4 @@
-# Woke Score for Plex
+# Wokearr
 
 Kleine, lokal gehostete Web-UI im Radarr/Sonarr-Look, die Filme und Serien in
 eurer Plex-Bibliothek mit einer Ampel-Badge (rot/gelb/grün) versieht, basierend
@@ -68,6 +68,12 @@ reicht in Portainer **Stacks -> woke-score -> Pull and redeploy** (zieht das
 
 \* Ohne diese beiden Variablen läuft die App im Demo-Modus.
 
+Änderungen an Umgebungsvariablen werden erst nach einem **Container-Redeploy**
+übernommen (Portainer: **Update the stack**, nicht nur die Seite neu laden).
+`BADGE_LABEL_STYLE` wirkt sich außerdem nur auf Poster aus, die *ab jetzt* neu
+angewendet werden - der Text ist fest ins Bild gebrannt und ändert sich bei
+schon vorher angewendeten Postern nicht rückwirkend von selbst.
+
 ### PLEX_URL richtig setzen
 
 Häufigste Fehlerquelle. `PLEX_URL` braucht **Schema + Host + Port**, sonst gibt es
@@ -87,8 +93,7 @@ SSL-/Verbindungsfehler im Log (z. B. `TLSV1_UNRECOGNIZED_NAME` oder
 Richtig: `PLEX_URL=http://192.168.1.10:32400`
 Falsch: `https://192.168.1.10`, `192.168.1.10:32400` (ohne Schema), `http://192.168.1.10` (ohne Port)
 
-Der Score-Cache (`score_cache.json`) und die unbebadgten Original-Poster
-(`originals/`, siehe unten) liegen im Volume `/data` und überstehen
+Der Score-Cache (`score_cache.json`) liegt im Volume `/data` und übersteht
 Container-Neustarts/-Updates.
 
 ## Bedienung
@@ -112,31 +117,12 @@ Container-Neustarts/-Updates.
    automatisch in diesem Abstand ausgeführt, ohne dass ihr die UI öffnen müsst.
 5. Das Poster-Grid zeigt automatisch nur Titel eurer Plex-Bibliothek, zu denen
    ein Score gefunden wurde.
-6. **Anwenden** (einzeln oder "Alle anwenden") brennt die Badge auf das
-   Original-Poster (einmalig in `/data/originals` zwischengespeichert) und
-   lädt das Ergebnis zurück nach Plex. So bleibt auch bei mehrfachem Anwenden
-   (z. B. nach einem geänderten Score) immer nur ein Badge sichtbar, statt
-   sich mehrere Badges zu überlagern.
-
-### Doppelte Badges nach dem Update auf den Original-Poster-Fix
-
-Vor diesem Fix hat "Anwenden" jedes Mal das *aktuell in Plex ausgewählte*
-Poster als Basis genommen - nach dem ersten Anwenden war das aber schon das
-bebadgte Bild, ein erneutes Anwenden hat also einen zweiten Badge draufgebrannt.
-Seitdem wird stattdessen ein einmalig gesichertes Original verwendet (siehe
-oben) - aber falls das erste Sichern nach dem Update auf ein Poster traf, das
-schon doppelt gebadgt war, bleibt dieser Zustand hartnäckig bestehen. Fix pro
-betroffenem Titel:
-
-1. In Plex das Poster des Titels zurücksetzen (Poster anklicken -> Poster
-   wählen -> Original-/TMDb-Poster auswählen statt des eigenen Uploads).
-2. In der Woke-Score-UI **Poster-Cache zurücksetzen** klicken (löscht die
-   zwischengespeicherten Originale in `/data/originals`).
-3. Den Titel erneut über **Anwenden** badgen - jetzt wird das frisch
-   zurückgesetzte Plex-Poster als neues, sauberes Original übernommen.
-
-**Kompletter Neuaufbau** hilft hier nicht - der bezieht sich nur auf die
-Score-Datenbank (`score_cache.json`), nicht auf die Poster.
+6. **Anwenden** (einzeln oder "Alle anwenden") holt sich für den Badge immer
+   das unbebadgte Original-Poster direkt von Plex' Agenten-Kandidaten (z. B.
+   TMDb) - nie das aktuell ausgewählte Poster, das ja der eigene, schon
+   bebadgte Upload sein kann. Dadurch bleibt auch bei wiederholtem Anwenden
+   (z. B. nach einem geänderten Score) immer nur ein Badge sichtbar, egal wie
+   oft ihr den Titel erneut anwendet - keine manuellen Schritte in Plex nötig.
 
 ### Plex sammelt alte Poster-Versionen an
 

@@ -105,8 +105,20 @@ async function applyBadges(ratingKeys, btn) {
     if (btn) { btn.disabled = false; btn.textContent = "Anwenden"; }
     return;
   }
-  await pollJob(data.job_id, "Poster werden aktualisiert");
+  const job = await pollJob(data.job_id, "Poster werden aktualisiert");
   if (btn) { btn.textContent = "Erledigt"; }
+  warnAboutMissingOriginals(job);
+}
+
+function warnAboutMissingOriginals(job) {
+  const warnings = (job.log || []).filter(l => l.includes("kein TMDb-Original in Plex gefunden"));
+  if (warnings.length === 0) return;
+  const titles = warnings.map(l => l.replace(/^OK \(mit Warnung\): /, "").split(" - ")[0]);
+  alert(
+    `Bei ${titles.length} Titel(n) hat Plex kein TMDb-Original-Poster mehr gefunden - ` +
+    `dort könnte der Badge weiterhin doppelt sein:\n\n${titles.join("\n")}\n\n` +
+    `Fix: In Plex bei diesen Titeln "Metadaten aktualisieren" ausführen, danach hier erneut anwenden.`
+  );
 }
 
 async function triggerRebuild(full) {

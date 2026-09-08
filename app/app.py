@@ -91,15 +91,20 @@ def tmdb_id_from_item(item):
     return None
 
 
-def fetch_original_poster_bytes(plex, item) -> bytes:
+def fetch_original_poster_bytes(plex, item) -> tuple[bytes, bool]:
     """
     Holt das unbebadgte Original-Poster direkt von Plex' Agenten-Kandidaten
     (z.B. TMDb) - NICHT das aktuell ausgewaehlte Poster, das ja unser eigener,
     bereits bebadgter Upload sein kann. Plex behaelt Agenten-Poster als
     Kandidaten dauerhaft (auch wenn ein eigener Upload ausgewaehlt ist), daher
-    ist das immer die zuverlaessige Quelle fuer "das Original". Faellt nur auf
-    das aktuell ausgewaehlte Poster zurueck, falls kein Agenten-Kandidat
-    gefunden wird (z.B. sehr seltene Faelle ohne Metadaten-Match).
+    ist das normalerweise immer die zuverlaessige Quelle fuer "das Original".
+
+    Gibt (bild_bytes, agent_poster_gefunden) zurueck. Faellt auf das aktuell
+    ausgewaehlte Poster zurueck, falls kein Agenten-Kandidat gefunden wird
+    (z.B. wenn Plex fuer den Titel keine TMDb-Metadaten mehr hat) - dabei kann
+    theoretisch ein bereits bebadgtes Poster erneut bebadgt werden. In diesem
+    Fall hilft ein "Metadaten aktualisieren" auf den Titel in Plex, damit
+    Plex den Original-Kandidaten neu laedt.
     """
     try:
         for p in item.posters():
@@ -109,11 +114,11 @@ def fetch_original_poster_bytes(plex, item) -> bytes:
             if is_upload or not key:
                 continue
             url = key if key.startswith("http") else plex.url(key, includeToken=True)
-            return requests.get(url, timeout=20).content
+            return requests.get(url, timeout=20).content, True
     except Exception:
         pass
     poster_url = plex.url(item.thumb, includeToken=True)
-    return requests.get(poster_url, timeout=20).content
+    return requests.get(poster_url, timeout=20).content, False
 
 
 def cleanup_old_uploaded_posters(item) -> int:
@@ -306,7 +311,7 @@ def api_apply():
                 # Immer das unbebadgte Original von Plex' Agenten-Kandidaten holen
                 # (nie das aktuell ausgewaehlte Poster - das kann unser eigener,
                 # bereits bebadgter Upload sein) - verhindert doppelte Badges.
-                img_bytes = fetch_original_poster_bytes(plex, item)
+                img_bytes, found_original = fetch_original_poster_bytes(plex, item)
 
                 with tempfile.TemporaryDirectory() as tmp:
                     src = Path(tmp) / "src.jpg"
@@ -316,7 +321,17 @@ def api_apply():
                     item.uploadPoster(filepath=str(dst))
                     if CLEANUP_OLD_POSTERS:
                         cleanup_old_uploaded_posters(item)
-                JOBS[job_id]["log"].append(f"OK: {item.title}")
+                if found_original:
+                    JOBS[job_id]["log"].append(f"OK: {item.title}")
+                else:
+                    msg = (
+                        f"OK (mit Warnung): {item.title} - kein TMDb-Original in Plex gefunden, "
+                        f"aktuelles Poster wurde als Basis genutzt (evtl. weiterhin doppelter Badge). "
+                        f"In Plex 'Metadaten aktualisieren' auf den Titel anwenden und danach erneut "
+                        f"'Anwenden' klicken."
+                    )
+                    JOBS[job_id]["log"].append(msg)
+                    print(f"[apply] {msg}", flush=True)
             except Exception as e:
                 JOBS[job_id]["log"].append(f"Fehler bei {rk}: {e}")
             JOBS[job_id]["progress"] = [i, len(rating_keys)]

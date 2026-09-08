@@ -79,17 +79,28 @@ def extract_one(url: str) -> dict | None:
         time.sleep(SLEEP_SECONDS)
 
 
-def main():
-    print("Hole Sitemap ...")
+def build_cache(cache: dict, on_progress=None, skip_existing: bool = True) -> tuple[dict, int]:
+    """
+    Ergaenzt cache (in-place) um neue/fehlende Titel aus der Sitemap - parallel mit
+    MAX_WORKERS Workern. Titel, deren Slug schon im Cache steht, werden bei
+    skip_existing=True uebersprungen: macht wiederholte Laeufe schnell (nur neue
+    Sitemap-Eintraege werden abgefragt) und schont die Zielseite.
+
+    on_progress(done, total) wird nach jedem verarbeiteten Titel aufgerufen (total
+    zaehlt nur die tatsaechlich abzufragenden URLs, keine uebersprungenen).
+
+    Gibt (cache, anzahl_verarbeiteter_urls) zurueck.
+    """
     urls = get_title_urls()
-    print(f"{len(urls)} Titel-URLs gefunden.")
+    if skip_existing:
+        known_slugs = {e["slug"] for e in cache.values() if e.get("slug")}
+        urls = [u for u in urls if u.rstrip("/").rsplit("/", 1)[-1] not in known_slugs]
 
-    cache = {}
-    if CACHE_FILE.exists():
-        cache = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
-        print(f"Bestehenden Cache geladen ({len(cache)} Eintraege) - wird ergaenzt/aktualisiert.")
+    total = len(urls)
+    done = 0
+    if on_progress:
+        on_progress(done, total)
 
-    done, failed = 0, 0
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         futures = {pool.submit(extract_one, u): u for u in urls}
         for fut in as_completed(futures):
@@ -97,14 +108,30 @@ def main():
             done += 1
             if result:
                 cache[result["key"]] = {k: v for k, v in result.items() if k != "key"}
-            else:
-                failed += 1
-            if done % 200 == 0:
-                print(f"  {done}/{len(urls)} verarbeitet, {failed} ohne Score, {len(cache)} im Cache")
-                CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
+            if on_progress:
+                on_progress(done, total)
 
+    return cache, done
+
+
+def main():
+    cache = {}
+    if CACHE_FILE.exists():
+        cache = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
+        print(f"Bestehenden Cache geladen ({len(cache)} Eintraege) - wird ergaenzt.")
+
+    print("Hole Sitemap ...")
+
+    def on_progress(done, total):
+        if done == 0:
+            print(f"{total} neue/fehlende Titel-URLs zu verarbeiten.")
+        elif done % 200 == 0:
+            print(f"  {done}/{total} verarbeitet, {len(cache)} im Cache")
+            CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    cache, done = build_cache(cache, on_progress=on_progress)
     CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"Fertig. {len(cache)} Titel mit Score im Cache, {failed} ohne Treffer. -> {CACHE_FILE}")
+    print(f"Fertig. {done} Titel neu verarbeitet, {len(cache)} insgesamt im Cache. -> {CACHE_FILE}")
 
 
 if __name__ == "__main__":

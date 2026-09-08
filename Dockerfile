@@ -21,4 +21,8 @@ EXPOSE 5005
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5005/healthz')" || exit 1
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5005", "--workers", "2", "--threads", "4", "--timeout", "120", "app:app"]
+# Nur 1 Worker-Prozess: der Job-Fortschritt (Cache-Aufbau/Badges anwenden) liegt
+# in einem In-Memory-Dict in app.py und muss deshalb in einem einzigen Prozess
+# bleiben, sonst landen Polling-Requests teils im falschen Prozess ("unknown"-Status).
+# --threads sorgt trotzdem fuer Nebenlaeufigkeit innerhalb des einen Prozesses.
+CMD ["gunicorn", "--bind", "0.0.0.0:5005", "--workers", "1", "--threads", "4", "--timeout", "120", "app:app"]

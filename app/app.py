@@ -59,15 +59,21 @@ CACHE_REBUILD_COOLDOWN_SECONDS = int(os.environ.get("CACHE_REBUILD_COOLDOWN_MINU
 DATA_DIR = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent / "data")))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 CACHE_FILE = DATA_DIR / "score_cache.json"
-# Original-Poster-Cache: die primaere Quelle fuer "Anwenden" (siehe
-# fetch_original_poster_bytes) - an Plex' ratingKey gebunden, wird vom Autopilot
-# fuer die ganze Bibliothek warmgehalten und um entfernte Titel bereinigt.
+# Original-Poster-Cache: unbebadgt, direkt von Plex' Agenten-Kandidaten geholt.
+# An Plex' ratingKey gebunden, wird vom Autopilot fuer die ganze Bibliothek
+# warmgehalten und um entfernte Titel bereinigt.
 ORIGINALS_DIR = DATA_DIR / "originals"
 ORIGINALS_DIR.mkdir(parents=True, exist_ok=True)
-# Merkt sich pro ratingKey, mit welchem Score zuletzt gebadgt wurde - so erkennt
-# der Autopilot, welche Titel neu sind oder sich im Score geaendert haben, ohne
-# jedes Mal alles neu zu badgen.
-APPLIED_STATE_FILE = DATA_DIR / "applied_state.json"
+# Gebrandete Poster: Score bereits reingebrannt, aber noch nicht zu Plex
+# hochgeladen - eigener Schritt, damit man sich das Ergebnis vor dem Push
+# lokal ansehen kann (siehe render_branded_image/push_to_plex).
+BRANDED_DIR = DATA_DIR / "branded"
+BRANDED_DIR.mkdir(parents=True, exist_ok=True)
+# Merkt sich pro ratingKey, mit welchem Score zuletzt gerendert bzw. zu Plex
+# hochgeladen wurde - so erkennt der Autopilot neue/geaenderte Titel, ohne
+# jedes Mal alles neu zu rendern/hochzuladen.
+RENDERED_STATE_FILE = DATA_DIR / "rendered_state.json"
+PUSHED_STATE_FILE = DATA_DIR / "pushed_state.json"
 # ---------------------------------------------------------------------------
 
 app = Flask(__name__)
@@ -75,7 +81,7 @@ JOBS = {}  # job_id -> {"state": "running"/"done"/"error", "progress": [n, total
 
 _rebuild_lock = threading.Lock()
 _last_rebuild_started = 0.0  # epoch seconds - schuetzt isitwokeornot.com vor zu haeufigen Abrufen
-_applied_state_lock = threading.Lock()
+_state_lock = threading.Lock()
 
 PLEX_TYPE_TO_CACHE_PREFIX = {"movie": "movie", "show": "tv"}
 
@@ -234,57 +240,64 @@ def cleanup_old_uploaded_posters(plex, item) -> int:
     return removed
 
 
-def _load_applied_state() -> dict:
-    if not APPLIED_STATE_FILE.exists():
+def _load_state_file(path: Path) -> dict:
+    if not path.exists():
         return {}
     try:
-        return json.loads(APPLIED_STATE_FILE.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return {}
 
 
-def _record_applied_score(rating_key, score) -> None:
-    """Merkt sich, mit welchem Score dieser Titel zuletzt gebadgt wurde -
-    Grundlage dafuer, dass der Autopilot nur neue/geaenderte Titel anfasst."""
-    with _applied_state_lock:
-        state = _load_applied_state()
+def _record_state(path: Path, rating_key, score) -> None:
+    with _state_lock:
+        state = _load_state_file(path)
         state[str(rating_key)] = score
-        APPLIED_STATE_FILE.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+        path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def apply_badge_to_item(plex, item, entry: dict) -> str:
+def render_branded_image(item, entry: dict, force: bool = False) -> Path:
     """
-    Brennt den Badge fuer 'entry' (Cache-Eintrag mit u.a. "score") auf das
-    Original-Poster von 'item' und laedt das Ergebnis nach Plex hoch. Raeumt
-    danach (falls aktiviert) alte eigene Uploads auf und merkt sich den
-    angewendeten Score (siehe _record_applied_score). Von manuellem "Anwenden"
-    und vom Autopilot (autonomous_sync) gemeinsam genutzt.
+    Brennt den Score aus 'entry' auf das lokal gecachte Original-Poster von
+    'item' (siehe ORIGINALS_DIR) und speichert das Ergebnis unter
+    BRANDED_DIR/<ratingKey>.jpg - reine lokale Datei-Operation, kein
+    Plex-Kontakt. Wer nachsehen will, ob ein Badge richtig aussieht, kann
+    diese Datei direkt im Docker-Volume oeffnen, bevor irgendwas bei Plex
+    landet.
 
-    Gibt eine Log-Zeile zurueck; enthaelt "kein TMDb-Original in Plex gefunden",
-    falls kein sauberer Original-Kandidat gefunden wurde (Warnsignal fuer evtl.
-    weiterhin doppelten Badge).
+    Ueberspringt das Rendern, wenn schon mit demselben Score gerendert wurde
+    (RENDERED_STATE_FILE), ausser force=True. Braucht ein bereits gecachtes
+    Original (siehe fetch_original_poster_bytes) - wirft sonst FileNotFoundError.
     """
-    import tempfile
+    rk = str(item.ratingKey)
+    branded_path = BRANDED_DIR / f"{rk}.jpg"
+    rendered_state = _load_state_file(RENDERED_STATE_FILE)
+    if not force and branded_path.exists() and rendered_state.get(rk) == entry["score"]:
+        return branded_path
 
-    img_bytes, found_original = fetch_original_poster_bytes(plex, item)
-    with tempfile.TemporaryDirectory() as tmp:
-        src = Path(tmp) / "src.jpg"
-        dst = Path(tmp) / "dst.jpg"
-        src.write_bytes(img_bytes)
-        add_badge(str(src), entry["score"], str(dst), position=BADGE_POSITION, label_style=BADGE_LABEL_STYLE)
-        item.uploadPoster(filepath=str(dst))
-        if CLEANUP_OLD_POSTERS:
-            cleanup_old_uploaded_posters(plex, item)
+    original_path = ORIGINALS_DIR / f"{rk}.jpg"
+    if not original_path.exists():
+        raise FileNotFoundError(f"Kein Original-Poster fuer '{item.title}' im Cache - erst synchronisieren.")
 
-    _record_applied_score(item.ratingKey, entry["score"])
+    add_badge(str(original_path), entry["score"], str(branded_path), position=BADGE_POSITION, label_style=BADGE_LABEL_STYLE)
+    _record_state(RENDERED_STATE_FILE, rk, entry["score"])
+    return branded_path
 
-    if found_original:
-        return f"OK: {item.title}"
-    return (
-        f"OK (mit Warnung): {item.title} - kein TMDb-Original in Plex gefunden, "
-        f"aktuelles Poster wurde als Basis genutzt (evtl. weiterhin doppelter Badge). "
-        f"In Plex 'Metadaten aktualisieren' auf den Titel anwenden und danach erneut anwenden."
-    )
+
+def push_to_plex(plex, item, entry: dict, force: bool = False) -> str:
+    """
+    Laedt das lokal gebrannte Poster (siehe render_branded_image, wird bei
+    Bedarf automatisch nachgerendert) zu Plex hoch und raeumt danach (falls
+    aktiviert) alte eigene Uploads auf. Merkt sich den hochgeladenen Score
+    (PUSHED_STATE_FILE). Von "Auf Plex uebertragen" und vom Autopilot
+    gemeinsam genutzt.
+    """
+    branded_path = render_branded_image(item, entry, force=force)
+    item.uploadPoster(filepath=str(branded_path))
+    if CLEANUP_OLD_POSTERS:
+        cleanup_old_uploaded_posters(plex, item)
+    _record_state(PUSHED_STATE_FILE, item.ratingKey, entry["score"])
+    return f"OK: {item.title}"
 
 
 def _current_library_items(plex) -> dict:
@@ -304,50 +317,42 @@ def _current_library_items(plex) -> dict:
     return items
 
 
-def autonomous_sync(log=None, progress=None) -> None:
-    """
-    Ein kompletter Autopilot-Durchlauf, in dieser Reihenfolge:
-      1. Score-Sync (inkrementell) bei isitwokeornot.com.
-      2. Plex-Abgleich: fuer Titel mit Score, die noch kein lokales Original
-         haben, das saubere Original von Plex holen und cachen.
-      3. Leichen entfernen: lokale Original-Cache-Dateien fuer Titel loeschen,
-         die nicht mehr in der (in Schritt 2 ohnehin abgefragten) Plex-
-         Bibliothek vorkommen - kein zusaetzlicher Plex-Request noetig.
-      4. Neue oder im Score geaenderte Titel automatisch badgen und nach Plex
-         hochladen (erkannt ueber APPLIED_STATE_FILE).
+def _emit(log, msg, prefix="sync"):
+    print(f"[{prefix}] {msg}", flush=True)
+    if log:
+        log(msg)
 
-    log(text) und progress(stufe, gesamt) sind optionale Callbacks fuer die
-    manuelle "Jetzt synchronisieren"-UI; der Cron-Loop ruft ohne sie auf.
-    """
-    def _log(msg):
-        print(f"[auto-sync] {msg}", flush=True)
-        if log:
-            log(msg)
 
-    def _progress(step, total=4):
-        if progress:
-            progress(step, total)
-
-    # Stufe 1: Score-Sync
+def score_sync(log=None) -> None:
+    """Stufe 1: inkrementeller Score-Sync bei isitwokeornot.com. Eigenstaendig
+    per Button "Score-Datenbank aktualisieren" oder Teil des Autopiloten."""
     wait = _reserve_rebuild_slot()
     if wait:
-        _log(f"Score-Sync uebersprungen (Cooldown, noch {int(wait)}s aktiv).")
-    else:
-        import build_score_cache as bsc
-        cache = load_cache()
+        _emit(log, f"Score-Sync uebersprungen (Cooldown, noch {int(wait)}s aktiv).")
+        return
+    import build_score_cache as bsc
+    cache = load_cache()
 
-        def on_progress(done, total):
-            if done and done % 200 == 0:
-                CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
+    def on_progress(done, total):
+        if done and done % 200 == 0:
+            CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
 
-        cache, processed = bsc.build_cache(cache, on_progress=on_progress)
-        CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
-        _log(f"Score-Sync: {processed} neue Titel, {len(cache)} insgesamt im Cache.")
-    _progress(1)
+    cache, processed = bsc.build_cache(cache, on_progress=on_progress)
+    CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
+    _emit(log, f"Score-Sync: {processed} neue Titel, {len(cache)} insgesamt im Cache.")
 
+
+def sync_library(log=None) -> None:
+    """
+    Stufe 2 - Plex-Abgleich, ohne irgendetwas zu Plex hochzuladen:
+      - fehlende Original-Poster fuer Titel mit Score nachladen (ORIGINALS_DIR)
+      - daraus die gebrandete Version rendern, sofern noch nicht mit dem
+        aktuellen Score geschehen (BRANDED_DIR, siehe render_branded_image)
+      - lokale Original-/Branded-Dateien fuer Titel loeschen, die nicht mehr
+        in der (hier ohnehin abgefragten) Plex-Bibliothek stehen ("Leichen")
+    """
     if demo_mode():
-        _log("Demo-Modus: kein Plex konfiguriert, Stufen 2-4 uebersprungen.")
-        _progress(4)
+        _emit(log, "Demo-Modus: kein Plex konfiguriert.")
         return
 
     cache = load_cache()
@@ -355,57 +360,142 @@ def autonomous_sync(log=None, progress=None) -> None:
     library = _current_library_items(plex)
     valid_keys = set(library.keys())
 
-    # Stufe 2: fehlende Original-Poster nachladen
-    to_warm = []
+    titled_entries = []
     for rk, (item, prefix) in library.items():
         tmdb_id = tmdb_id_from_item(item)
         entry = cache.get(f"{prefix}:{tmdb_id}") if tmdb_id else None
-        if entry and not (ORIGINALS_DIR / f"{rk}.jpg").exists():
-            to_warm.append(item)
+        if entry:
+            titled_entries.append((rk, item, entry))
+
+    # Original-Poster nachladen, wo noch keins gecacht ist
+    to_warm = [(item, entry) for rk, item, entry in titled_entries if not (ORIGINALS_DIR / f"{rk}.jpg").exists()]
+    warnings = []
     if to_warm:
         with ThreadPoolExecutor(max_workers=POSTER_WORKERS) as pool:
-            futures = [pool.submit(fetch_original_poster_bytes, plex, it) for it in to_warm]
+            futures = {pool.submit(fetch_original_poster_bytes, plex, item): item for item, _ in to_warm}
             for f in as_completed(futures):
+                item = futures[f]
                 try:
-                    f.result()
+                    _, found = f.result()
+                    if not found:
+                        warnings.append(item.title)
                 except Exception as e:
-                    _log(f"Fehler beim Original-Poster holen: {e}")
-        _log(f"Poster-Cache: {len(to_warm)} neue Original(e) geholt.")
-    _progress(2)
+                    _emit(log, f"Fehler beim Original-Poster holen ({item.title}): {e}")
+        _emit(log, f"Original-Poster: {len(to_warm)} neue geholt.")
+    if warnings:
+        _emit(log, "Warnung: kein TMDb-Original in Plex gefunden fuer: " + ", ".join(warnings) +
+              " - aktuelles Poster wurde als Basis genutzt (evtl. doppelter Badge). "
+              "Fix: in Plex 'Metadaten aktualisieren', danach erneut synchronisieren.")
 
-    # Stufe 3: Leichen entfernen (Titel nicht mehr in Plex)
+    # Gebrandete Version fuer neue/geaenderte Titel rendern
+    rendered_state = _load_state_file(RENDERED_STATE_FILE)
+    to_render = [
+        (item, entry) for rk, item, entry in titled_entries
+        if (ORIGINALS_DIR / f"{rk}.jpg").exists() and rendered_state.get(rk) != entry["score"]
+    ]
+    rendered = 0
+    for item, entry in to_render:
+        try:
+            render_branded_image(item, entry)
+            rendered += 1
+        except Exception as e:
+            _emit(log, f"Fehler beim Rendern ({item.title}): {e}")
+    if rendered:
+        _emit(log, f"Gebrandete Poster gerendert: {rendered}.")
+
+    # Leichen entfernen (Titel nicht mehr in Plex) - in beiden lokalen Ordnern
     removed = 0
-    for f in ORIGINALS_DIR.glob("*.jpg"):
-        if f.stem not in valid_keys:
-            try:
-                f.unlink()
-                removed += 1
-            except OSError:
-                pass
+    for folder in (ORIGINALS_DIR, BRANDED_DIR):
+        for f in folder.glob("*.jpg"):
+            if f.stem not in valid_keys:
+                try:
+                    f.unlink()
+                    removed += 1
+                except OSError:
+                    pass
     if removed:
-        _log(f"Leichen entfernt: {removed} Original(e) fuer nicht mehr vorhandene Titel.")
-    _progress(3)
+        _emit(log, f"Leichen entfernt: {removed} Datei(en) fuer nicht mehr vorhandene Titel.")
 
-    # Stufe 4: neue/geaenderte Titel automatisch anwenden
-    applied_state = _load_applied_state()
-    to_apply = []
-    for rk, (item, prefix) in library.items():
+    if not to_warm and not to_render and not removed:
+        _emit(log, "Synchronisiert: nichts Neues.")
+
+
+def push_pending_to_plex(log=None, progress=None, force: bool = False, rating_keys=None) -> None:
+    """
+    Stufe 3 - laedt Poster zu Plex hoch. Ohne rating_keys: die ganze
+    Bibliothek, aber standardmaessig (force=False) nur Titel, die neu sind
+    oder deren Score sich seit dem letzten Push geaendert hat
+    (PUSHED_STATE_FILE) - so macht der Autopilot bei unveraendertem Zustand
+    nichts. Mit rating_keys: nur diese Titel; force=True (z.B. Klick auf
+    "Auf Plex uebertragen") laedt sie in jedem Fall neu hoch, unabhaengig vom
+    zuletzt gepushten Score - z.B. um nach einer geaenderten Badge-Einstellung
+    alles neu zu erzwingen. progress(done, total) ist ein optionaler Callback
+    fuer eine Fortschrittsanzeige in der UI.
+    """
+    if demo_mode():
+        _emit(log, "Demo-Modus: kein Plex zum Uebertragen.")
+        return
+
+    cache = load_cache()
+    plex = get_plex()
+    library = _current_library_items(plex)
+
+    if rating_keys is not None:
+        selection = {rk: library[rk] for rk in rating_keys if rk in library}
+    else:
+        selection = library
+
+    pushed_state = _load_state_file(PUSHED_STATE_FILE)
+    to_push = []
+    for rk, (item, prefix) in selection.items():
         tmdb_id = tmdb_id_from_item(item)
         entry = cache.get(f"{prefix}:{tmdb_id}") if tmdb_id else None
-        if entry and applied_state.get(rk) != entry["score"]:
-            to_apply.append((item, entry))
-    if to_apply:
-        _log(f"Autopilot wendet {len(to_apply)} neue/geaenderte Titel an...")
-        with ThreadPoolExecutor(max_workers=POSTER_WORKERS) as pool:
-            futures = [pool.submit(apply_badge_to_item, plex, it, entry) for it, entry in to_apply]
-            for f in as_completed(futures):
-                try:
-                    _log(f.result())
-                except Exception as e:
-                    _log(f"Fehler beim automatischen Anwenden: {e}")
-    else:
-        _log("Autopilot: keine neuen/geaenderten Titel.")
-    _progress(4)
+        if not entry:
+            continue
+        if force or pushed_state.get(rk) != entry["score"]:
+            to_push.append((item, entry))
+
+    if not to_push:
+        _emit(log, "Nichts zu uebertragen.")
+        if progress:
+            progress(0, 0)
+        return
+
+    progress_lock = threading.Lock()
+    done = 0
+
+    def process(item, entry):
+        nonlocal done
+        try:
+            _emit(log, push_to_plex(plex, item, entry, force))
+        except Exception as e:
+            _emit(log, f"Fehler beim Uebertragen ({item.title}): {e}")
+        finally:
+            if progress:
+                with progress_lock:
+                    done += 1
+                    progress(done, len(to_push))
+
+    with ThreadPoolExecutor(max_workers=POSTER_WORKERS) as pool:
+        futures = [pool.submit(process, item, entry) for item, entry in to_push]
+        for f in as_completed(futures):
+            pass
+
+
+def autonomous_sync(log=None, progress=None) -> None:
+    """Autopilot: alle drei Stufen hintereinander (Score-Sync, Plex-Abgleich
+    inkl. Rendern, Push). Fuer manuelles Eingreifen einzeln nutzbar: siehe
+    score_sync/sync_library/push_pending_to_plex."""
+    def _progress(step):
+        if progress:
+            progress(step, 3)
+
+    score_sync(log=log)
+    _progress(1)
+    sync_library(log=log)
+    _progress(2)
+    push_pending_to_plex(log=log)
+    _progress(3)
 
 
 def _reserve_rebuild_slot() -> float:
@@ -483,22 +573,34 @@ def api_library():
 
 @app.route("/api/poster/<rating_key>")
 def api_poster(rating_key):
-    """Proxied Poster - haelt den Plex-Token aus dem Browser raus.
+    """
+    Poster fuer die Grid-Ansicht. Kommt aus dem lokalen Original-Cache
+    (ORIGINALS_DIR) - Wokearr zeigt also immer das eigene, saubere Original
+    (der Score kommt als reines CSS-Overlay obendrauf, siehe app.js), egal
+    was gerade tatsaechlich als Poster in Plex ausgewaehlt ist. Faellt nur
+    zurueck auf Plex' aktuelles Poster, falls fuer diesen Titel noch kein
+    Original gecacht ist (z.B. vor dem ersten "Jetzt synchronisieren").
 
-    Explizit nicht cachebar: das zugrundeliegende Plex-Poster kann sich durch
-    Anwenden/Autopilot jederzeit aendern, die URL selbst bleibt aber gleich -
-    ohne "no-store" wuerde der Browser sonst dauerhaft einen alten (z.B. noch
-    doppelt bebadgten) Stand anzeigen, obwohl in Plex laengst das aktuelle
-    Poster liegt."""
+    Explizit nicht cachebar (Cache-Control: no-store), da sich die Datei durch
+    Sync/Autopilot jederzeit aendern kann, die URL selbst aber gleich bleibt.
+    """
     demo = next((d for d in DEMO_ITEMS if d["ratingKey"] == rating_key), None)
     if demo:
         img = requests.get(demo["poster"], timeout=15).content
-    else:
-        plex = get_plex()
-        item = plex.fetchItem(int(rating_key))
-        poster_url = plex.url(item.thumb, includeToken=True)
-        img = requests.get(poster_url, timeout=15).content
+        resp = send_file(io.BytesIO(img), mimetype="image/jpeg")
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
 
+    cached = ORIGINALS_DIR / f"{rating_key}.jpg"
+    if cached.exists():
+        resp = send_file(cached, mimetype="image/jpeg")
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+
+    plex = get_plex()
+    item = plex.fetchItem(int(rating_key))
+    poster_url = plex.url(item.thumb, includeToken=True)
+    img = requests.get(poster_url, timeout=15).content
     resp = send_file(io.BytesIO(img), mimetype="image/jpeg")
     resp.headers["Cache-Control"] = "no-store"
     return resp
@@ -541,48 +643,55 @@ def api_rebuild_cache():
     return jsonify({"job_id": job_id})
 
 
+@app.route("/api/sync-library", methods=["POST"])
+def api_sync_library():
+    """Stufe 2 manuell: Plex-Abgleich - Original-Poster nachladen, gebrandete
+    Version rendern, entfernte Titel aufraeumen. Kein Push zu Plex (siehe
+    /api/apply dafuer)."""
+    if demo_mode():
+        return jsonify({"error": "Demo-Modus: keine Plex-Bibliothek zum Abgleichen."}), 400
+
+    job_id = str(uuid.uuid4())
+    JOBS[job_id] = {"state": "running", "progress": [0, 0], "log": []}
+
+    def run():
+        try:
+            sync_library(log=lambda msg: JOBS[job_id]["log"].append(msg))
+            JOBS[job_id]["state"] = "done"
+        except Exception as e:
+            JOBS[job_id]["state"] = "error"
+            JOBS[job_id]["log"].append(str(e))
+
+    threading.Thread(target=run, daemon=True).start()
+    return jsonify({"job_id": job_id})
+
+
 @app.route("/api/apply", methods=["POST"])
 def api_apply():
+    """Stufe 3 manuell ("Auf Plex uebertragen"): laedt die gebrandeten Poster
+    der angegebenen Titel zu Plex hoch - erzwungen (force=True), unabhaengig
+    davon, ob der Score sich seit dem letzten Push geaendert hat. Rendert bei
+    Bedarf automatisch nach (siehe push_to_plex)."""
     if demo_mode():
-        return jsonify({"error": "Demo-Modus: PLEX_URL/PLEX_TOKEN als Umgebungsvariablen setzen, um wirklich anzuwenden."}), 400
+        return jsonify({"error": "Demo-Modus: PLEX_URL/PLEX_TOKEN als Umgebungsvariablen setzen, um wirklich zu uebertragen."}), 400
 
     payload = request.get_json(force=True)
-    rating_keys = payload.get("ratingKeys", [])
+    rating_keys = [str(rk) for rk in payload.get("ratingKeys", [])]
     job_id = str(uuid.uuid4())
     JOBS[job_id] = {"state": "running", "progress": [0, len(rating_keys)], "log": []}
 
     def run():
-        cache = load_cache()
-        plex = get_plex()
-
-        progress_lock = threading.Lock()
-        done = 0
-
-        def process(rk):
-            nonlocal done
-            try:
-                item = plex.fetchItem(int(rk))
-                tmdb_id = tmdb_id_from_item(item)
-                prefix = PLEX_TYPE_TO_CACHE_PREFIX.get(item.type)
-                entry = cache.get(f"{prefix}:{tmdb_id}") if prefix else None
-                if not entry:
-                    return
-                msg = apply_badge_to_item(plex, item, entry)
-                JOBS[job_id]["log"].append(msg)
-                if "kein TMDb-Original" in msg:
-                    print(f"[apply] {msg}", flush=True)
-            except Exception as e:
-                JOBS[job_id]["log"].append(f"Fehler bei {rk}: {e}")
-            finally:
-                with progress_lock:
-                    done += 1
-                    JOBS[job_id]["progress"] = [done, len(rating_keys)]
-
-        with ThreadPoolExecutor(max_workers=POSTER_WORKERS) as pool:
-            futures = [pool.submit(process, rk) for rk in rating_keys]
-            for f in as_completed(futures):
-                pass
-        JOBS[job_id]["state"] = "done"
+        try:
+            push_pending_to_plex(
+                log=lambda msg: JOBS[job_id]["log"].append(msg),
+                progress=lambda done, total: JOBS[job_id].update(progress=[done, total]),
+                force=True,
+                rating_keys=rating_keys,
+            )
+            JOBS[job_id]["state"] = "done"
+        except Exception as e:
+            JOBS[job_id]["state"] = "error"
+            JOBS[job_id]["log"].append(str(e))
 
     threading.Thread(target=run, daemon=True).start()
     return jsonify({"job_id": job_id})
@@ -633,29 +742,6 @@ def api_cleanup_posters():
 
             JOBS[job_id]["state"] = "done"
             JOBS[job_id]["log"].append(f"Fertig: {removed_total} alte Poster-Versionen in Plex entfernt.")
-        except Exception as e:
-            JOBS[job_id]["state"] = "error"
-            JOBS[job_id]["log"].append(str(e))
-
-    threading.Thread(target=run, daemon=True).start()
-    return jsonify({"job_id": job_id})
-
-
-@app.route("/api/auto-sync", methods=["POST"])
-def api_auto_sync():
-    """Stoesst denselben Autopilot-Durchlauf (autonomous_sync) sofort manuell
-    an, den auch AUTO_SYNC_INTERVAL_MINUTES im Hintergrund ausfuehrt - zum
-    Testen/Erzwingen, ohne auf den naechsten Cron-Tick warten zu muessen."""
-    job_id = str(uuid.uuid4())
-    JOBS[job_id] = {"state": "running", "progress": [0, 4], "log": []}
-
-    def run():
-        try:
-            autonomous_sync(
-                log=lambda msg: JOBS[job_id]["log"].append(msg),
-                progress=lambda step, total: JOBS[job_id].update(progress=[step, total]),
-            )
-            JOBS[job_id]["state"] = "done"
         except Exception as e:
             JOBS[job_id]["state"] = "error"
             JOBS[job_id]["log"].append(str(e))

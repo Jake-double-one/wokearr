@@ -31,7 +31,7 @@ function render() {
         <div class="card-title">${item.title}</div>
         <div class="card-year">${item.year || ""}</div>
         <div class="card-actions">
-          <button class="card-apply" data-key="${item.ratingKey}">Anwenden</button>
+          <button class="card-apply" data-key="${item.ratingKey}">Übertragen</button>
           <a class="source-link" href="${sourceUrl}" target="_blank" rel="noopener noreferrer" title="Quelle: isitwokeornot.com">
             <img class="source-icon" src="https://isitwokeornot.com/favicon.ico" alt="isitwokeornot.com">
           </a>
@@ -102,23 +102,17 @@ async function applyBadges(ratingKeys, btn) {
   if (data.error) {
     showToast(data.error);
     setTimeout(hideToast, 4000);
-    if (btn) { btn.disabled = false; btn.textContent = "Anwenden"; }
+    if (btn) { btn.disabled = false; btn.textContent = "Übertragen"; }
     return;
   }
-  const job = await pollJob(data.job_id, "Poster werden aktualisiert");
+  const job = await pollJob(data.job_id, "Poster werden übertragen");
   if (btn) { btn.textContent = "Erledigt"; }
-  warnAboutMissingOriginals(job);
 }
 
 function warnAboutMissingOriginals(job) {
-  const warnings = (job.log || []).filter(l => l.includes("kein TMDb-Original in Plex gefunden"));
-  if (warnings.length === 0) return;
-  const titles = warnings.map(l => l.replace(/^OK \(mit Warnung\): /, "").split(" - ")[0]);
-  alert(
-    `Bei ${titles.length} Titel(n) hat Plex kein TMDb-Original-Poster mehr gefunden - ` +
-    `dort könnte der Badge weiterhin doppelt sein:\n\n${titles.join("\n")}\n\n` +
-    `Fix: In Plex bei diesen Titeln "Metadaten aktualisieren" ausführen, danach hier erneut anwenden.`
-  );
+  const line = (job.log || []).find(l => l.startsWith("Warnung: kein TMDb-Original"));
+  if (!line) return;
+  alert(line);
 }
 
 async function triggerRebuild(full) {
@@ -137,12 +131,18 @@ async function triggerRebuild(full) {
   loadLibrary();
 }
 
-document.getElementById("btn-auto-sync").addEventListener("click", async (e) => {
+document.getElementById("btn-sync-library").addEventListener("click", async (e) => {
   const btn = e.currentTarget;
   btn.disabled = true;
-  const res = await fetch("/api/auto-sync", { method: "POST" });
+  const res = await fetch("/api/sync-library", { method: "POST" });
   const data = await res.json();
-  const job = await pollJob(data.job_id, "Synchronisiere");
+  if (data.error) {
+    showToast(data.error);
+    setTimeout(hideToast, 5000);
+    btn.disabled = false;
+    return;
+  }
+  const job = await pollJob(data.job_id, "Synchronisiere mit Plex");
   btn.disabled = false;
   warnAboutMissingOriginals(job);
   loadLibrary();

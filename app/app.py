@@ -143,18 +143,37 @@ def _poster_candidate_bytes(plex, p) -> bytes | None:
         return None
 
 
+def _is_upload_poster(p) -> bool:
+    """
+    True, wenn dieser Plex-Poster-Kandidat ein manueller Upload ist (unserer
+    oder ein fremder/frueherer, auch aus der Zeit vor dem Badge-Marker) -
+    erkannt an Plex' eigenem Key-Schema ("upload://posters/..."). Alles
+    andere (direkte TMDb-/Fanart-/TheTVDB-/Amazon-/Gracenote-URLs, Plex'
+    interne Agenten-Referenz "metadata://posters/...") ist ein
+    Agenten-/Original-Poster.
+
+    Zuverlässiger als der Badge-Marker allein: der Marker erkennt nur Poster,
+    die WIR seit seiner Einfuehrung selbst erzeugt haben, nicht Uploads von
+    davor. Das Key-Schema ist dagegen unabhaengig vom Alter des Uploads.
+    """
+    key = getattr(p, "key", "") or ""
+    return "upload://posters" in key or "upload%3A%2F%2Fposters" in key
+
+
 def fetch_original_poster_bytes(plex, item) -> tuple[bytes, bool]:
     """
     Liefert das unbebadgte Original-Poster. Liest primaer aus dem lokalen
-    Cache (ORIGINALS_DIR) - dort landet nur, was zuvor eindeutig als "kein
-    eigener Badge" verifiziert wurde (siehe _is_own_badge), das Vertrauen ist
-    also gerechtfertigt und ein erneuter Live-Check bei Plex nicht noetig.
+    Cache (ORIGINALS_DIR) - dort landet nur, was zuvor eindeutig als
+    Agenten-Original verifiziert wurde, das Vertrauen ist also gerechtfertigt
+    und ein erneuter Live-Check bei Plex nicht noetig.
 
     Nur wenn fuer diesen Titel noch nichts gecacht ist (z.B. neu in Plex),
-    wird live bei Plex nachgeschaut: alle Poster-Kandidaten durchgehen und den
-    ersten nehmen, der eindeutig NICHT unseren Marker traegt. Kandidaten, bei
-    denen sich das nicht sicher entscheiden laesst (kaputter Download), werden
-    uebersprungen statt riskiert - siehe _is_own_badge.
+    wird live bei Plex nachgeschaut: alle Poster-Kandidaten durchgehen,
+    Uploads (siehe _is_upload_poster) grundsaetzlich ignorieren - auch
+    unmarkierte aus der Zeit vor dem Badge-Marker, die sich sonst faelschlich
+    als "Original" haetten durchschmuggeln koennen - und den ersten
+    verbleibenden (Agenten-)Kandidaten nehmen. Der Badge-Marker dient hier nur
+    noch als zusaetzliche Sicherheitspruefung auf den gewaehlten Kandidaten.
 
     Findet sich gar kein verwertbarer Kandidat, wird als letzter Ausweg das
     aktuell ausgewaehlte Poster verwendet (kann theoretisch schon bebadgt
@@ -166,8 +185,10 @@ def fetch_original_poster_bytes(plex, item) -> tuple[bytes, bool]:
 
     try:
         for p in item.posters():
+            if _is_upload_poster(p):
+                continue
             data = _poster_candidate_bytes(plex, p)
-            if _is_own_badge(data) is not False:
+            if data is None or _is_own_badge(data) is True:
                 continue
             cached.write_bytes(data)
             return data, True
@@ -180,15 +201,14 @@ def fetch_original_poster_bytes(plex, item) -> tuple[bytes, bool]:
 
 def cleanup_old_uploaded_posters(plex, item) -> int:
     """
-    Loescht (best effort) aeltere Poster-Versionen dieses Plex-Items, die
-    unseren eigenen Badge-Marker tragen (siehe _is_own_badge) - alles ausser
-    der aktuell ausgewaehlten. Ein Loeschversuch auf einen Agenten-Poster
-    (z.B. TMDb) kommt dank der Marker-Pruefung erst gar nicht vor; wuerde er
-    doch versucht, schlaegt er bei Plex einfach folgenlos fehl.
+    Loescht (best effort) aeltere, manuell hochgeladene Poster-Versionen
+    dieses Plex-Items (siehe _is_upload_poster) - alles ausser der aktuell
+    ausgewaehlten. Erfasst damit auch Uploads von vor der Einfuehrung des
+    Badge-Markers. Ein Loeschversuch auf einen Agenten-Poster (z.B. TMDb)
+    kommt dank der Key-Pruefung erst gar nicht vor.
 
     Loggt jeden Kandidaten samt Entscheidung/Ergebnis nach stdout (sichtbar in
-    den Container-Logs) - Diagnose-Hilfe, falls Plex/plexapi sich hier anders
-    verhaelt als erwartet (war schon einmal der Fall bei provider/key).
+    den Container-Logs).
     """
     removed = 0
     try:
@@ -202,10 +222,8 @@ def cleanup_old_uploaded_posters(plex, item) -> int:
         if getattr(p, "selected", False):
             print(f"[cleanup] {item.title}: uebersprungen (aktuell ausgewaehlt) - {key}", flush=True)
             continue
-        data = _poster_candidate_bytes(plex, p)
-        marker = _is_own_badge(data)
-        if marker is not True:
-            print(f"[cleanup] {item.title}: uebersprungen (kein eigener Marker, Ergebnis={marker}) - {key}", flush=True)
+        if not _is_upload_poster(p):
+            print(f"[cleanup] {item.title}: uebersprungen (Agenten-Poster) - {key}", flush=True)
             continue
         try:
             p.delete()

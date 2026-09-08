@@ -158,9 +158,12 @@ beschränkt, füllt den Plattenplatz des Plex-Servers aber mit der Zeit spürbar
 (besonders nach mehrfachem Anwenden desselben Titels, z. B. beim Testen).
 
 - **Automatisch:** Mit `CLEANUP_OLD_POSTERS=true` (Standard) räumt die App
-  nach jedem "Anwenden" die älteren, selbst hochgeladenen Versionen des
-  jeweiligen Titels in Plex weg. TMDb-/Agent-Poster werden nie angerührt, nur
-  eigene Uploads - und niemals die gerade aktive Version.
+  nach jedem "Anwenden" alle hochgeladenen Versionen des jeweiligen Titels in
+  Plex weg, außer der gerade aktiven - erkannt an Plex' eigenem Key-Schema für
+  Uploads, nicht am Bildinhalt. Erfasst deshalb auch Uploads von vor diesem
+  Feature. TMDb-/Agent-Poster werden nie angerührt (auch technisch nicht
+  löschbar über die Plex-API). Faustregel: alles, was mal über Wokearr (oder
+  manuell in Plex) hochgeladen wurde und nicht mehr aktiv ist, wird entfernt.
 - **Einmalig für die ganze Bibliothek:** Button **"Alte Poster in Plex
   löschen"** geht alle Titel durch und räumt bereits angesammelte alte
   Versionen auf.

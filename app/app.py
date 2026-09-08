@@ -12,6 +12,7 @@ import json
 import os
 import sys
 import threading
+import time
 import uuid
 from pathlib import Path
 
@@ -27,14 +28,33 @@ PLEX_URL = os.environ.get("PLEX_URL", "").rstrip("/")
 PLEX_TOKEN = os.environ.get("PLEX_TOKEN", "")
 LIBRARY_SECTIONS = [s.strip() for s in os.environ.get("LIBRARY_SECTIONS", "Filme,Serien").split(",") if s.strip()]
 BADGE_POSITION = os.environ.get("BADGE_POSITION", "top-right")
+BADGE_LABEL_STYLE = os.environ.get("BADGE_LABEL_STYLE", "percent")
+if BADGE_LABEL_STYLE not in ("percent", "woke"):
+    BADGE_LABEL_STYLE = "percent"
+
+# Wie oft (Minuten) die Sitemap automatisch im Hintergrund auf neue/fehlende Titel
+# geprueft wird. 0 = deaktiviert (Standard) - dann nur ueber die Buttons in der UI.
+CACHE_AUTO_REFRESH_MINUTES = int(os.environ.get("CACHE_AUTO_REFRESH_MINUTES", "0") or "0")
+# Mindestabstand zwischen zwei Sitemap-Abrufen (manuell oder automatisch), damit
+# isitwokeornot.com nicht durch Spam-Klicks oder eine zu knappe Cron-Angabe
+# ueberlastet wird.
+CACHE_REBUILD_COOLDOWN_SECONDS = int(os.environ.get("CACHE_REBUILD_COOLDOWN_MINUTES", "5") or "5") * 60
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent / "data")))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 CACHE_FILE = DATA_DIR / "score_cache.json"
+# Unbebadgte Original-Poster, einmal pro Titel zwischengespeichert - sorgt dafuer,
+# dass ein erneutes "Anwenden" den Badge immer frisch auf das Original brennt statt
+# auf ein Poster, das schon einen Badge traegt (sonst ueberlagern sich die Kreise).
+ORIGINALS_DIR = DATA_DIR / "originals"
+ORIGINALS_DIR.mkdir(parents=True, exist_ok=True)
 # ---------------------------------------------------------------------------
 
 app = Flask(__name__)
 JOBS = {}  # job_id -> {"state": "running"/"done"/"error", "progress": [n, total], "log": [...]}
+
+_rebuild_lock = threading.Lock()
+_last_rebuild_started = 0.0  # epoch seconds - schuetzt isitwokeornot.com vor zu haeufigen Abrufen
 
 PLEX_TYPE_TO_CACHE_PREFIX = {"movie": "movie", "show": "tv"}
 
@@ -70,9 +90,49 @@ def tmdb_id_from_item(item):
     return None
 
 
+def _reserve_rebuild_slot() -> float:
+    """
+    Reserviert einen Cache-Rebuild-Lauf, falls der Cooldown seit dem letzten Lauf
+    abgelaufen ist. Gibt 0 zurueck (und reserviert), wenn ein Lauf starten darf,
+    sonst die verbleibende Wartezeit in Sekunden.
+    """
+    global _last_rebuild_started
+    with _rebuild_lock:
+        elapsed = time.time() - _last_rebuild_started
+        if elapsed < CACHE_REBUILD_COOLDOWN_SECONDS:
+            return CACHE_REBUILD_COOLDOWN_SECONDS - elapsed
+        _last_rebuild_started = time.time()
+        return 0.0
+
+
+def _auto_refresh_loop():
+    interval = CACHE_AUTO_REFRESH_MINUTES * 60
+    while True:
+        time.sleep(interval)
+        if _reserve_rebuild_slot():
+            continue  # Cooldown noch aktiv (z.B. gerade erst manuell aktualisiert) - naechster Tick
+        try:
+            import build_score_cache as bsc
+            cache = load_cache()
+
+            def on_progress(done, total):
+                if done and done % 200 == 0:
+                    CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
+
+            cache, processed = bsc.build_cache(cache, on_progress=on_progress)
+            CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
+            print(f"[auto-refresh] {processed} neue Titel verarbeitet, {len(cache)} insgesamt im Cache.", flush=True)
+        except Exception as e:
+            print(f"[auto-refresh] Fehler: {e}", flush=True)
+
+
+if CACHE_AUTO_REFRESH_MINUTES > 0:
+    threading.Thread(target=_auto_refresh_loop, daemon=True).start()
+
+
 @app.route("/")
 def index():
-    return render_template("index.html", demo=demo_mode())
+    return render_template("index.html", demo=demo_mode(), badge_label_style=BADGE_LABEL_STYLE)
 
 
 @app.route("/healthz")
@@ -131,6 +191,16 @@ def api_poster(rating_key):
 
 @app.route("/api/rebuild-cache", methods=["POST"])
 def api_rebuild_cache():
+    payload = request.get_json(silent=True) or {}
+    full = bool(payload.get("full"))
+
+    wait = _reserve_rebuild_slot()
+    if wait:
+        return jsonify({
+            "error": f"Bitte kurz warten: naechster Sitemap-Abruf erst in {int(wait) + 1}s moeglich (Cooldown "
+                     f"schuetzt isitwokeornot.com vor zu haeufigen Anfragen)."
+        }), 429
+
     job_id = str(uuid.uuid4())
     JOBS[job_id] = {"state": "running", "progress": [0, 0], "log": ["Sitemap wird geladen..."]}
 
@@ -144,10 +214,10 @@ def api_rebuild_cache():
                 if done and done % 200 == 0:
                     CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
 
-            cache, processed = bsc.build_cache(cache, on_progress=on_progress)
+            cache, processed = bsc.build_cache(cache, on_progress=on_progress, skip_existing=not full)
             CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
             JOBS[job_id]["state"] = "done"
-            JOBS[job_id]["log"].append(f"Fertig: {processed} neue Titel verarbeitet, {len(cache)} insgesamt im Cache.")
+            JOBS[job_id]["log"].append(f"Fertig: {processed} Titel verarbeitet, {len(cache)} insgesamt im Cache.")
         except Exception as e:
             JOBS[job_id]["state"] = "error"
             JOBS[job_id]["log"].append(str(e))
@@ -178,13 +248,23 @@ def api_apply():
                 entry = cache.get(f"{prefix}:{tmdb_id}") if prefix else None
                 if not entry:
                     continue
-                poster_url = plex.url(item.thumb, includeToken=True)
-                img_bytes = requests.get(poster_url, timeout=20).content
+
+                # Original (unbebadgtes) Poster einmalig sichern und danach immer
+                # davon ausgehen - verhindert, dass ein Badge auf ein bereits
+                # bebadgtes Poster gebrannt wird (doppelte/ueberlagerte Kreise).
+                original_path = ORIGINALS_DIR / f"{rk}.jpg"
+                if original_path.exists():
+                    img_bytes = original_path.read_bytes()
+                else:
+                    poster_url = plex.url(item.thumb, includeToken=True)
+                    img_bytes = requests.get(poster_url, timeout=20).content
+                    original_path.write_bytes(img_bytes)
+
                 with tempfile.TemporaryDirectory() as tmp:
                     src = Path(tmp) / "src.jpg"
                     dst = Path(tmp) / "dst.jpg"
                     src.write_bytes(img_bytes)
-                    add_badge(str(src), entry["score"], str(dst), position=BADGE_POSITION)
+                    add_badge(str(src), entry["score"], str(dst), position=BADGE_POSITION, label_style=BADGE_LABEL_STYLE)
                     item.uploadPoster(filepath=str(dst))
                 JOBS[job_id]["log"].append(f"OK: {item.title}")
             except Exception as e:

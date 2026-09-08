@@ -61,6 +61,9 @@ reicht in Portainer **Stacks -> woke-score -> Pull and redeploy** (zieht das
 | `PLEX_TOKEN`        | ja*     | –               | [Token finden](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/) |
 | `LIBRARY_SECTIONS`  | nein    | `Filme,Serien`  | Exakte Namen eurer Plex-Bibliotheken, kommagetrennt |
 | `BADGE_POSITION`    | nein    | `top-right`     | `top-right` \| `top-left` \| `bottom-right` \| `bottom-left` |
+| `BADGE_LABEL_STYLE` | nein    | `percent`       | `percent` (`37%`) \| `woke` (`37% woke`) |
+| `CACHE_AUTO_REFRESH_MINUTES` | nein | `0` (aus) | Intervall in Minuten für automatischen, inkrementellen Sitemap-Abgleich im Hintergrund |
+| `CACHE_REBUILD_COOLDOWN_MINUTES` | nein | `5` | Mindestabstand zwischen zwei Sitemap-Abrufen (manuell oder automatisch) |
 
 \* Ohne diese beiden Variablen läuft die App im Demo-Modus.
 
@@ -83,21 +86,36 @@ SSL-/Verbindungsfehler im Log (z. B. `TLSV1_UNRECOGNIZED_NAME` oder
 Richtig: `PLEX_URL=http://192.168.1.10:32400`
 Falsch: `https://192.168.1.10`, `192.168.1.10:32400` (ohne Schema), `http://192.168.1.10` (ohne Port)
 
-Der Score-Cache (`score_cache.json`) liegt im Volume `/data` und übersteht
+Der Score-Cache (`score_cache.json`) und die unbebadgten Original-Poster
+(`originals/`, siehe unten) liegen im Volume `/data` und überstehen
 Container-Neustarts/-Updates.
 
 ## Bedienung
 
 1. **Cache aktualisieren** – crawlt die Sitemap von isitwokeornot.com
-   (~5.500 Titel) parallel (4 Worker) und speichert Score + TMDb-/IMDb-ID lokal.
-   Bereits gecachte Titel werden dabei übersprungen – ein erneuter Lauf fragt
-   also nur neue Titel ab und ist entsprechend schnell. Der Cache-Aufbau läuft
-   als Hintergrund-Prozess im Container weiter, auch wenn ihr die Seite
-   neu ladet, filtert oder den Browser-Tab schließt.
-2. Das Poster-Grid zeigt automatisch nur Titel eurer Plex-Bibliothek, zu denen
+   parallel (4 Worker) und speichert Score + TMDb-/IMDb-ID lokal. Bereits
+   vollständig gecachte Titel werden dabei übersprungen – ein erneuter Lauf
+   fragt also nur neue/fehlende Titel ab und ist entsprechend schnell. Der
+   Cache-Aufbau läuft als Hintergrund-Prozess im Container weiter, auch wenn
+   ihr die Seite neu ladet, filtert oder den Browser-Tab schließt.
+2. **Kompletter Neuaufbau** – fragt wirklich alle Titel erneut ab (z. B. um
+   zwischenzeitlich geänderte Scores auf isitwokeornot.com nachzuziehen).
+   Dauert entsprechend länger als "Cache aktualisieren".
+3. Beide Buttons teilen sich einen Cooldown (`CACHE_REBUILD_COOLDOWN_MINUTES`,
+   Standard 5 Minuten) seit dem letzten Sitemap-Abruf – egal ob manuell oder
+   automatisch ausgelöst. Ein zu früher Klick zeigt stattdessen an, wie lange
+   noch zu warten ist. Das schützt isitwokeornot.com vor zu vielen Anfragen
+   (Spam-Schutz).
+4. Optional automatisch im Hintergrund: `CACHE_AUTO_REFRESH_MINUTES` auf ein
+   Intervall > 0 setzen, dann wird "Cache aktualisieren" (inkrementell)
+   automatisch in diesem Abstand ausgeführt, ohne dass ihr die UI öffnen müsst.
+5. Das Poster-Grid zeigt automatisch nur Titel eurer Plex-Bibliothek, zu denen
    ein Score gefunden wurde.
-3. **Anwenden** (einzeln oder "Alle anwenden") lädt das aktuelle Poster,
-   brennt die Badge drauf und lädt es zurück nach Plex.
+6. **Anwenden** (einzeln oder "Alle anwenden") brennt die Badge auf das
+   Original-Poster (einmalig in `/data/originals` zwischengespeichert) und
+   lädt das Ergebnis zurück nach Plex. So bleibt auch bei mehrfachem Anwenden
+   (z. B. nach einem geänderten Score) immer nur ein Badge sichtbar, statt
+   sich mehrere Badges zu überlagern.
 
 ## Eigenes Image bauen und veröffentlichen
 

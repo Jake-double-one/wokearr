@@ -14,6 +14,7 @@ import sys
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import requests
@@ -38,6 +39,11 @@ if BADGE_LABEL_STYLE not in ("percent", "woke"):
 # jedem Anwenden werden deshalb standardmaessig aeltere, selbst hochgeladene
 # Versionen entfernt (Original-/Agent-Poster wie TMDb bleiben unangetastet).
 CLEANUP_OLD_POSTERS = os.environ.get("CLEANUP_OLD_POSTERS", "true").strip().lower() not in ("false", "0", "no")
+
+# Anwenden/Aufraeumen lesen pro Titel mehrere Poster-Kandidaten von Plex herunter
+# (um unseren Badge-Marker zu pruefen) - I/O-lastig, daher parallel wie beim
+# Cache-Aufbau statt einen Titel nach dem anderen abzuarbeiten.
+POSTER_WORKERS = 4
 
 # Wie oft (Minuten) die Sitemap automatisch im Hintergrund auf neue/fehlende Titel
 # geprueft wird. 0 = deaktiviert (Standard) - dann nur ueber die Buttons in der UI.
@@ -327,16 +333,21 @@ def api_apply():
         cache = load_cache()
         plex = get_plex()
         import tempfile
-        for i, rk in enumerate(rating_keys, 1):
+
+        progress_lock = threading.Lock()
+        done = 0
+
+        def process(rk):
+            nonlocal done
             try:
                 item = plex.fetchItem(int(rk))
                 tmdb_id = tmdb_id_from_item(item)
                 prefix = PLEX_TYPE_TO_CACHE_PREFIX.get(item.type)
                 entry = cache.get(f"{prefix}:{tmdb_id}") if prefix else None
                 if not entry:
-                    continue
+                    return
 
-                # Immer das unbebadgte Original von Plex' Agenten-Kandidaten holen
+                # Immer das unbebadgte Original von Plex' Poster-Kandidaten holen
                 # (nie das aktuell ausgewaehlte Poster - das kann unser eigener,
                 # bereits bebadgter Upload sein) - verhindert doppelte Badges.
                 img_bytes, found_original = fetch_original_poster_bytes(plex, item)
@@ -362,7 +373,15 @@ def api_apply():
                     print(f"[apply] {msg}", flush=True)
             except Exception as e:
                 JOBS[job_id]["log"].append(f"Fehler bei {rk}: {e}")
-            JOBS[job_id]["progress"] = [i, len(rating_keys)]
+            finally:
+                with progress_lock:
+                    done += 1
+                    JOBS[job_id]["progress"] = [done, len(rating_keys)]
+
+        with ThreadPoolExecutor(max_workers=POSTER_WORKERS) as pool:
+            futures = [pool.submit(process, rk) for rk in rating_keys]
+            for f in as_completed(futures):
+                pass
         JOBS[job_id]["state"] = "done"
 
     threading.Thread(target=run, daemon=True).start()
@@ -390,13 +409,28 @@ def api_cleanup_posters():
                 except Exception:
                     continue
             JOBS[job_id]["progress"] = [0, len(items)]
+
+            progress_lock = threading.Lock()
+            done = 0
             removed_total = 0
-            for i, item in enumerate(items, 1):
+
+            def process(item):
+                nonlocal done, removed_total
                 try:
-                    removed_total += cleanup_old_uploaded_posters(plex, item)
+                    removed = cleanup_old_uploaded_posters(plex, item)
                 except Exception as e:
+                    removed = 0
                     JOBS[job_id]["log"].append(f"Fehler bei {getattr(item, 'title', '?')}: {e}")
-                JOBS[job_id]["progress"] = [i, len(items)]
+                with progress_lock:
+                    done += 1
+                    removed_total += removed
+                    JOBS[job_id]["progress"] = [done, len(items)]
+
+            with ThreadPoolExecutor(max_workers=POSTER_WORKERS) as pool:
+                futures = [pool.submit(process, item) for item in items]
+                for f in as_completed(futures):
+                    pass
+
             JOBS[job_id]["state"] = "done"
             JOBS[job_id]["log"].append(f"Fertig: {removed_total} alte Poster-Versionen in Plex entfernt.")
         except Exception as e:

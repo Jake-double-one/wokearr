@@ -64,6 +64,7 @@ reicht in Portainer **Stacks -> woke-score -> Pull and redeploy** (zieht das
 | `BADGE_LABEL_STYLE` | nein    | `percent`       | `percent` (`37%`) \| `woke` (`37% woke`) |
 | `CACHE_AUTO_REFRESH_MINUTES` | nein | `0` (aus) | Intervall in Minuten für automatischen, inkrementellen Sitemap-Abgleich im Hintergrund |
 | `CACHE_REBUILD_COOLDOWN_MINUTES` | nein | `5` | Mindestabstand zwischen zwei Sitemap-Abrufen (manuell oder automatisch) |
+| `CLEANUP_OLD_POSTERS` | nein | `true` | Nach jedem Anwenden automatisch ältere, selbst hochgeladene Poster-Versionen in Plex löschen (siehe unten) |
 
 \* Ohne diese beiden Variablen läuft die App im Demo-Modus.
 
@@ -136,6 +137,24 @@ betroffenem Titel:
 
 **Kompletter Neuaufbau** hilft hier nicht - der bezieht sich nur auf die
 Score-Datenbank (`score_cache.json`), nicht auf die Poster.
+
+### Plex sammelt alte Poster-Versionen an
+
+Plex behält bei jedem hochgeladenen Poster automatisch die vorherige Version
+als "Poster-Historie" (sichtbar in der Poster-Auswahl in Plex) und löscht sie
+nie von selbst - das ist normales Plex-Verhalten, nicht auf dieses Tool
+beschränkt, füllt den Plattenplatz des Plex-Servers aber mit der Zeit spürbar
+(besonders nach mehrfachem Anwenden desselben Titels, z. B. beim Testen).
+
+- **Automatisch:** Mit `CLEANUP_OLD_POSTERS=true` (Standard) räumt die App
+  nach jedem "Anwenden" die älteren, selbst hochgeladenen Versionen des
+  jeweiligen Titels in Plex weg. TMDb-/Agent-Poster werden nie angerührt, nur
+  eigene Uploads - und niemals die gerade aktive Version.
+- **Einmalig für die ganze Bibliothek:** Button **"Alte Poster in Plex
+  löschen"** geht alle Titel durch und räumt bereits angesammelte alte
+  Versionen auf.
+- Das betrifft ausschließlich Plex' eigenen Speicher, nicht den `/data`-Docker-
+  Volume dieser App.
 
 ## Eigenes Image bauen und veröffentlichen
 

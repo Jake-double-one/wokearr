@@ -152,6 +152,23 @@ document.getElementById("btn-reset-originals").addEventListener("click", async (
   setTimeout(hideToast, 6000);
 });
 
+document.getElementById("btn-cleanup-posters").addEventListener("click", async () => {
+  const ok = confirm(
+    "Alte, selbst hochgeladene Poster-Versionen in der gesamten Plex-Bibliothek löschen?\n\n" +
+    "Die aktuell ausgewählten Poster bleiben unangetastet, nur ungenutzte ältere " +
+    "Versionen werden entfernt. Original-Poster von TMDb & Co. werden nicht angerührt."
+  );
+  if (!ok) return;
+  const res = await fetch("/api/cleanup-posters", { method: "POST" });
+  const data = await res.json();
+  if (data.error) {
+    showToast(data.error);
+    setTimeout(hideToast, 5000);
+    return;
+  }
+  await pollJob(data.job_id, "Plex-Poster werden aufgeräumt");
+});
+
 document.querySelectorAll(".chip").forEach(chip => {
   chip.addEventListener("click", () => {
     document.querySelectorAll(".chip").forEach(c => c.classList.remove("chip-active"));

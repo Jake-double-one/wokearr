@@ -15,10 +15,11 @@
   </div>
   <div class="topbar-actions">
     <span id="demo-flag" class="demo-flag" style="display:none">Demo-Modus – Plex nicht konfiguriert</span>
+    <button id="btn-auto-sync" class="btn btn-primary" title="Score-Sync, Poster-Cache, entfernte Titel aufräumen und neue/geänderte Titel automatisch anwenden - alles in einem Lauf (dasselbe, was auch der Autopilot-Cron macht)">Jetzt synchronisieren</button>
     <button id="btn-rebuild" class="btn btn-ghost">Cache aktualisieren</button>
     <button id="btn-rebuild-full" class="btn btn-ghost" title="Fragt alle Titel erneut ab (dauert deutlich länger)">Kompletter Neuaufbau</button>
     <button id="btn-cleanup-posters" class="btn btn-ghost" title="Löscht alte, selbst hochgeladene Poster-Versionen in Plex (Poster-Historie), die sich über die Zeit ansammeln">Alte Poster in Plex löschen</button>
-    <button id="btn-apply-all" class="btn btn-primary">Alle anwenden</button>
+    <button id="btn-apply-all" class="btn btn-ghost">Alle anwenden</button>
   </div>
 </header>
 
@@ -32,7 +33,7 @@
 <main>
   <div id="grid" class="grid"></div>
   <p id="empty-state" class="empty-state" style="display:none">
-    Keine Titel mit Woke-Score gefunden. Cache aktualisieren oder PLEX_URL/PLEX_TOKEN pruefen.
+    Keine Titel mit Woke-Score gefunden. "Jetzt synchronisieren" klicken oder PLEX_URL/PLEX_TOKEN pruefen.
   </p>
 </main>
 

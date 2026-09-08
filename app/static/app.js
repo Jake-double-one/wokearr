@@ -137,6 +137,17 @@ async function triggerRebuild(full) {
   loadLibrary();
 }
 
+document.getElementById("btn-auto-sync").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  const res = await fetch("/api/auto-sync", { method: "POST" });
+  const data = await res.json();
+  const job = await pollJob(data.job_id, "Synchronisiere");
+  btn.disabled = false;
+  warnAboutMissingOriginals(job);
+  loadLibrary();
+});
+
 document.getElementById("btn-rebuild").addEventListener("click", () => triggerRebuild(false));
 
 document.getElementById("btn-rebuild-full").addEventListener("click", () => {

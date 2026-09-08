@@ -136,19 +136,17 @@ def api_rebuild_cache():
     def run():
         try:
             import build_score_cache as bsc
-            urls = bsc.get_title_urls()
-            JOBS[job_id]["progress"] = [0, len(urls)]
             cache = load_cache()
-            for i, url in enumerate(urls, 1):
-                result = bsc.extract_one(url)
-                if result:
-                    cache[result["key"]] = {k: v for k, v in result.items() if k != "key"}
-                JOBS[job_id]["progress"] = [i, len(urls)]
-                if i % 200 == 0:
+
+            def on_progress(done, total):
+                JOBS[job_id]["progress"] = [done, total]
+                if done and done % 200 == 0:
                     CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
+
+            cache, processed = bsc.build_cache(cache, on_progress=on_progress)
             CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
             JOBS[job_id]["state"] = "done"
-            JOBS[job_id]["log"].append(f"Fertig: {len(cache)} Titel im Cache.")
+            JOBS[job_id]["log"].append(f"Fertig: {processed} neue Titel verarbeitet, {len(cache)} insgesamt im Cache.")
         except Exception as e:
             JOBS[job_id]["state"] = "error"
             JOBS[job_id]["log"].append(str(e))

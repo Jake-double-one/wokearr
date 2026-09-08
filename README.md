@@ -64,15 +64,36 @@ reicht in Portainer **Stacks -> woke-score -> Pull and redeploy** (zieht das
 
 \* Ohne diese beiden Variablen läuft die App im Demo-Modus.
 
+### PLEX_URL richtig setzen
+
+Häufigste Fehlerquelle. `PLEX_URL` braucht **Schema + Host + Port**, sonst gibt es
+SSL-/Verbindungsfehler im Log (z. B. `TLSV1_UNRECOGNIZED_NAME` oder
+`Max retries exceeded`):
+
+- **Schema**: `http://`, nicht `https://` – Plex spricht auf dem lokalen Netz
+  standardmäßig unverschlüsseltes HTTP. `https://` ohne eigenes Zertifikat landet
+  auf Port 443, wo gar kein passender Server antwortet.
+- **Port**: immer `:32400` mit angeben (Plex' Standardport). Ohne Port nimmt
+  `https://` automatisch 443, `http://` automatisch 80 – beides falsch.
+- **Host**: die lokale IP oder der Hostname eures Plex-Servers, aus Sicht des
+  Docker-Hosts/Containers erreichbar (z. B. `192.168.1.10`, nicht `localhost`,
+  außer die App läuft im selben Netzwerk-Namespace wie Plex).
+- Kein Slash am Ende nötig.
+
+Richtig: `PLEX_URL=http://192.168.1.10:32400`
+Falsch: `https://192.168.1.10`, `192.168.1.10:32400` (ohne Schema), `http://192.168.1.10` (ohne Port)
+
 Der Score-Cache (`score_cache.json`) liegt im Volume `/data` und übersteht
 Container-Neustarts/-Updates.
 
 ## Bedienung
 
-1. **Cache aktualisieren** – crawlt einmalig die Sitemap von
-   isitwokeornot.com (~5.500 Titel) und speichert Score + TMDb-/IMDb-ID lokal.
-   Danach reicht ein gelegentliches erneutes Ausführen, um neue Titel
-   nachzuziehen.
+1. **Cache aktualisieren** – crawlt die Sitemap von isitwokeornot.com
+   (~5.500 Titel) parallel (4 Worker) und speichert Score + TMDb-/IMDb-ID lokal.
+   Bereits gecachte Titel werden dabei übersprungen – ein erneuter Lauf fragt
+   also nur neue Titel ab und ist entsprechend schnell. Der Cache-Aufbau läuft
+   als Hintergrund-Prozess im Container weiter, auch wenn ihr die Seite
+   neu ladet, filtert oder den Browser-Tab schließt.
 2. Das Poster-Grid zeigt automatisch nur Titel eurer Plex-Bibliothek, zu denen
    ein Score gefunden wurde.
 3. **Anwenden** (einzeln oder "Alle anwenden") lädt das aktuelle Poster,

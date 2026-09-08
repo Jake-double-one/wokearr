@@ -34,6 +34,15 @@ BADGE_LABEL_STYLE = os.environ.get("BADGE_LABEL_STYLE", "percent")
 if BADGE_LABEL_STYLE not in ("percent", "woke"):
     BADGE_LABEL_STYLE = "percent"
 
+# Breite der Badge relativ zur Posterbreite, in Prozent. Mindestbreite fest bei
+# 20% verankert, sonst wird die Badge auf kleineren Postern schnell unleserlich.
+BADGE_WIDTH_MIN_PERCENT = 20.0
+try:
+    BADGE_WIDTH_PERCENT = float(os.environ.get("BADGE_WIDTH_PERCENT", "20"))
+except ValueError:
+    BADGE_WIDTH_PERCENT = BADGE_WIDTH_MIN_PERCENT
+BADGE_WIDTH_PERCENT = max(BADGE_WIDTH_PERCENT, BADGE_WIDTH_MIN_PERCENT)
+
 # Plex behaelt bei jedem uploadPoster() die vorherige Version als Poster-Historie
 # und loescht sie nie von selbst - laesst den Plex-Server sonst zuwachsen. Nach
 # jedem Anwenden werden deshalb standardmaessig aeltere, selbst hochgeladene
@@ -279,7 +288,14 @@ def render_branded_image(item, entry: dict, force: bool = False) -> Path:
     if not original_path.exists():
         raise FileNotFoundError(f"Kein Original-Poster fuer '{item.title}' im Cache - erst synchronisieren.")
 
-    add_badge(str(original_path), entry["score"], str(branded_path), position=BADGE_POSITION, label_style=BADGE_LABEL_STYLE)
+    add_badge(
+        str(original_path),
+        entry["score"],
+        str(branded_path),
+        position=BADGE_POSITION,
+        label_style=BADGE_LABEL_STYLE,
+        width_percent=BADGE_WIDTH_PERCENT,
+    )
     _record_state(RENDERED_STATE_FILE, rk, entry["score"])
     return branded_path
 

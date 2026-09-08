@@ -276,6 +276,27 @@ def api_apply():
     return jsonify({"job_id": job_id})
 
 
+@app.route("/api/reset-originals", methods=["POST"])
+def api_reset_originals():
+    """
+    Loescht die zwischengespeicherten Original-Poster (siehe ORIGINALS_DIR).
+    Noetig, falls ein Poster schon VOR dem Doppel-Badge-Fix mehrfach "Anwenden"
+    durchlaufen hat - dann wurde versehentlich ein bereits bebadgtes Poster als
+    "Original" gecacht. Ersetzt NICHT das aktuell in Plex ausgewaehlte Poster;
+    dieses sollte vorher manuell in Plex zurueckgesetzt werden (Poster waehlen),
+    sonst wird beim naechsten "Anwenden" wieder das (noch doppelte) Plex-Poster
+    als neues "Original" uebernommen.
+    """
+    removed = 0
+    for f in ORIGINALS_DIR.glob("*.jpg"):
+        try:
+            f.unlink()
+            removed += 1
+        except OSError:
+            pass
+    return jsonify({"removed": removed})
+
+
 @app.route("/api/job/<job_id>")
 def api_job(job_id):
     return jsonify(JOBS.get(job_id, {"state": "unknown"}))

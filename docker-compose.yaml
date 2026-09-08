@@ -8,7 +8,7 @@ services:
       dockerfile: Dockerfile
     # Alternative, sobald per GitHub Actions ein Image veroeffentlicht wurde
     # (siehe .github/workflows/docker-publish.yml) - dann "build:" oben entfernen:
-    # image: ghcr.io/<dein-github-user>/<repo-name>:latest
+    # image: ghcr.io/jake-double-one/wokearr:latest
     container_name: woke-score
     restart: unless-stopped
     ports:

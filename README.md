@@ -18,8 +18,8 @@ Buttons zum Aktualisieren des Score-Caches bzw. Anwenden der Badges.
 ## Schnellstart (Docker Compose)
 
 ```bash
-git clone https://github.com/<dein-user>/<repo-name>.git
-cd <repo-name>
+git clone https://github.com/Jake-double-one/wokearr.git
+cd wokearr
 cp .env.example .env
 # .env mit PLEX_URL / PLEX_TOKEN / LIBRARY_SECTIONS ausfuellen
 docker compose up -d --build
@@ -38,7 +38,7 @@ ausprobieren könnt.
    - **Repository**: URL dieses GitHub-Repos angeben, Compose-Pfad
      `docker-compose.yaml` – Portainer baut das Image dann selbst, oder
    - **Web editor**: Inhalt von `docker-compose.yaml` einfügen und die Zeile
-     `build:` durch `image: ghcr.io/<dein-user>/<repo-name>:latest` ersetzen,
+     `build:` durch `image: ghcr.io/jake-double-one/wokearr:latest` ersetzen,
      falls ihr die GitHub-Action (unten) für fertige Images nutzt.
 3. Unter **Environment variables** `PLEX_URL`, `PLEX_TOKEN`, `LIBRARY_SECTIONS`
    setzen (die `.env`-Datei wird von Portainer nicht automatisch gelesen).
@@ -73,7 +73,7 @@ Container-Neustarts/-Updates.
 
 Der mitgelieferte Workflow `.github/workflows/docker-publish.yml` baut das
 Image bei jedem Push auf `main` (und bei Version-Tags `v*`) automatisch und
-veröffentlicht es nach `ghcr.io/<dein-user>/<repo-name>`. Dafür ist keine
+veröffentlicht es nach `ghcr.io/jake-double-one/wokearr`. Dafür ist keine
 zusätzliche Konfiguration nötig, GitHub Actions nutzt den eingebauten
 `GITHUB_TOKEN`.
 

@@ -22,8 +22,12 @@ git clone https://github.com/Jake-double-one/wokearr.git
 cd wokearr
 cp .env.example .env
 # .env mit PLEX_URL / PLEX_TOKEN / LIBRARY_SECTIONS ausfuellen
-docker compose up -d --build
+docker compose up -d
 ```
+
+Das Compose-File zieht direkt das fertige Image von
+`ghcr.io/jake-double-one/wokearr` (siehe [Releases](https://github.com/Jake-double-one/wokearr/releases)) –
+kein lokaler Build nötig.
 
 Danach `http://<server-ip>:5005` öffnen.
 
@@ -34,15 +38,20 @@ ausprobieren könnt.
 ## In Portainer als Stack deployen
 
 1. **Stacks -> Add stack**
-2. Als Quelle entweder:
-   - **Repository**: URL dieses GitHub-Repos angeben, Compose-Pfad
-     `docker-compose.yaml` – Portainer baut das Image dann selbst, oder
-   - **Web editor**: Inhalt von `docker-compose.yaml` einfügen und die Zeile
-     `build:` durch `image: ghcr.io/jake-double-one/wokearr:latest` ersetzen,
-     falls ihr die GitHub-Action (unten) für fertige Images nutzt.
+2. Als Quelle **Web editor** wählen und den Inhalt von `docker-compose.yaml`
+   1:1 einfügen – die Datei zieht direkt das fertige Image von
+   `ghcr.io/jake-double-one/wokearr`, kein Build nötig.
+   (Alternativ **Repository** als Quelle mit Compose-Pfad `docker-compose.yaml`,
+   dann baut Portainer stattdessen selbst aus dem Repo-Code – dazu wie im
+   Compose-File beschrieben `image:` durch `build:` ersetzen.)
 3. Unter **Environment variables** `PLEX_URL`, `PLEX_TOKEN`, `LIBRARY_SECTIONS`
    setzen (die `.env`-Datei wird von Portainer nicht automatisch gelesen).
 4. **Deploy the stack**.
+
+Für ein Update auf eine neue [Release](https://github.com/Jake-double-one/wokearr/releases)
+reicht in Portainer **Stacks -> woke-score -> Pull and redeploy** (zieht das
+`:latest`-Image neu). Wer eine Version fest pinnen will, ändert den Tag in
+`image:` z. B. auf `:v0.1.0`.
 
 ## Umgebungsvariablen
 

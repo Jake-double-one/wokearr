@@ -32,6 +32,12 @@ BADGE_LABEL_STYLE = os.environ.get("BADGE_LABEL_STYLE", "percent")
 if BADGE_LABEL_STYLE not in ("percent", "woke"):
     BADGE_LABEL_STYLE = "percent"
 
+# Plex behaelt bei jedem uploadPoster() die vorherige Version als Poster-Historie
+# und loescht sie nie von selbst - laesst den Plex-Server sonst zuwachsen. Nach
+# jedem Anwenden werden deshalb standardmaessig aeltere, selbst hochgeladene
+# Versionen entfernt (Original-/Agent-Poster wie TMDb bleiben unangetastet).
+CLEANUP_OLD_POSTERS = os.environ.get("CLEANUP_OLD_POSTERS", "true").strip().lower() not in ("false", "0", "no")
+
 # Wie oft (Minuten) die Sitemap automatisch im Hintergrund auf neue/fehlende Titel
 # geprueft wird. 0 = deaktiviert (Standard) - dann nur ueber die Buttons in der UI.
 CACHE_AUTO_REFRESH_MINUTES = int(os.environ.get("CACHE_AUTO_REFRESH_MINUTES", "0") or "0")
@@ -88,6 +94,34 @@ def tmdb_id_from_item(item):
         if guid.id.startswith("tmdb://"):
             return guid.id.split("tmdb://", 1)[1]
     return None
+
+
+def cleanup_old_uploaded_posters(item) -> int:
+    """
+    Loescht (best effort) aeltere, selbst hochgeladene Poster-Versionen dieses
+    Plex-Items - alles ausser der aktuell ausgewaehlten. Agenten-Poster (TMDb
+    usw.) lassen sich ueber die Plex-API ohnehin nicht loeschen, nur abwaehlen;
+    ein Loeschversuch dort schlaegt einfach folgenlos fehl. Die aktuell
+    ausgewaehlte Version wird nie angefasst.
+    """
+    removed = 0
+    try:
+        for p in item.posters():
+            if getattr(p, "selected", False):
+                continue
+            provider = (getattr(p, "provider", None) or "").lower()
+            key = getattr(p, "key", "") or ""
+            is_upload = provider in ("local", "upload") or key.startswith("upload://") or key.startswith("/upload")
+            if not is_upload:
+                continue
+            try:
+                p.delete()
+                removed += 1
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return removed
 
 
 def _reserve_rebuild_slot() -> float:
@@ -266,11 +300,51 @@ def api_apply():
                     src.write_bytes(img_bytes)
                     add_badge(str(src), entry["score"], str(dst), position=BADGE_POSITION, label_style=BADGE_LABEL_STYLE)
                     item.uploadPoster(filepath=str(dst))
+                    if CLEANUP_OLD_POSTERS:
+                        cleanup_old_uploaded_posters(item)
                 JOBS[job_id]["log"].append(f"OK: {item.title}")
             except Exception as e:
                 JOBS[job_id]["log"].append(f"Fehler bei {rk}: {e}")
             JOBS[job_id]["progress"] = [i, len(rating_keys)]
         JOBS[job_id]["state"] = "done"
+
+    threading.Thread(target=run, daemon=True).start()
+    return jsonify({"job_id": job_id})
+
+
+@app.route("/api/cleanup-posters", methods=["POST"])
+def api_cleanup_posters():
+    """Geht einmalig die ganze Bibliothek durch und entfernt alte, selbst
+    hochgeladene Poster-Versionen aus Plex (siehe cleanup_old_uploaded_posters).
+    Unabhaengig von CLEANUP_OLD_POSTERS immer verfuegbar, da explizit ausgeloest."""
+    if demo_mode():
+        return jsonify({"error": "Demo-Modus: keine Plex-Bibliothek zum Aufraeumen."}), 400
+
+    job_id = str(uuid.uuid4())
+    JOBS[job_id] = {"state": "running", "progress": [0, 0], "log": []}
+
+    def run():
+        try:
+            plex = get_plex()
+            items = []
+            for section_name in LIBRARY_SECTIONS:
+                try:
+                    items.extend(plex.library.section(section_name).all())
+                except Exception:
+                    continue
+            JOBS[job_id]["progress"] = [0, len(items)]
+            removed_total = 0
+            for i, item in enumerate(items, 1):
+                try:
+                    removed_total += cleanup_old_uploaded_posters(item)
+                except Exception as e:
+                    JOBS[job_id]["log"].append(f"Fehler bei {getattr(item, 'title', '?')}: {e}")
+                JOBS[job_id]["progress"] = [i, len(items)]
+            JOBS[job_id]["state"] = "done"
+            JOBS[job_id]["log"].append(f"Fertig: {removed_total} alte Poster-Versionen in Plex entfernt.")
+        except Exception as e:
+            JOBS[job_id]["state"] = "error"
+            JOBS[job_id]["log"].append(str(e))
 
     threading.Thread(target=run, daemon=True).start()
     return jsonify({"job_id": job_id})

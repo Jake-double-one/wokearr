@@ -66,11 +66,23 @@ def _badge_box(w, h, margin, badge_w, badge_h, position):
     return x0, y0, x1, y0 + badge_h
 
 
-def add_badge(poster_path: str, score: int, out_path: str, position: str = "top-right", label_style: str = "percent"):
+def add_badge(
+    poster_path: str,
+    score: int,
+    out_path: str,
+    position: str = "top-right",
+    label_style: str = "percent",
+    width_percent: float = 20.0,
+):
+    """width_percent steuert die Groesse der Badge relativ zur Posterbreite
+    (z.B. 20.0 = 20%). Bezieht sich beim Kreis-Stil ("percent") direkt auf den
+    Durchmesser; beim Pillen-Stil ("woke") proportional auf die Schriftgroesse,
+    so skalieren beide Varianten konsistent mit demselben Regler."""
     img = Image.open(poster_path).convert("RGBA")
     w, h = img.size
     margin = int(w * 0.035)
     color = score_color(score)
+    size_fraction = width_percent / 100
 
     overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
@@ -80,7 +92,7 @@ def add_badge(poster_path: str, score: int, out_path: str, position: str = "top-
         # festen Kreis (wuerde ueberlaufen). Stattdessen eine sich an den Text
         # anpassende Pille, wie sie auch die Web-UI fuer den Badge-Chip nutzt.
         text = f"{score}% woke"
-        font = _load_font(int(w * 0.05))
+        font = _load_font(int(w * size_fraction * 0.25))
         bbox = draw.textbbox((0, 0), text, font=font)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         pad_x, pad_y = int(th * 0.85), int(th * 0.5)
@@ -102,7 +114,7 @@ def add_badge(poster_path: str, score: int, out_path: str, position: str = "top-
         draw.text((tx, ty), text, font=font, fill=COLOR_WHITE)
     else:
         # Kreis-Badge mit zentrierter Prozentzahl
-        diameter = int(w * 0.22)
+        diameter = int(w * size_fraction)
         x0, y0, x1, y1 = _badge_box(w, h, margin, diameter, diameter, position)
 
         shadow_pad = int(diameter * 0.06)

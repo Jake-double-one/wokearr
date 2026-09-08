@@ -68,6 +68,7 @@ reicht in Portainer **Stacks -> woke-score -> Pull and redeploy** (zieht das
 | `LIBRARY_SECTIONS`  | nein    | `Filme,Serien`  | Exakte Namen eurer Plex-Bibliotheken, kommagetrennt |
 | `BADGE_POSITION`    | nein    | `top-right`     | `top-right` \| `top-left` \| `bottom-right` \| `bottom-left` |
 | `BADGE_LABEL_STYLE` | nein    | `percent`       | `percent` (`37%`) \| `woke` (`37% woke`) |
+| `BADGE_WIDTH_PERCENT` | nein  | `20`            | Breite der Badge relativ zur Posterbreite, in Prozent. Mindestwert fest bei `20` verankert (kleinere Werte werden automatisch angehoben) |
 | `AUTO_SYNC_INTERVAL_MINUTES` | nein | `0` (aus) | Intervall in Minuten für den kompletten Autopilot-Lauf (Score-Sync, Poster-Cache, aufräumen, automatisch anwenden). `60` für stündlich. |
 | `CACHE_REBUILD_COOLDOWN_MINUTES` | nein | `5` | Mindestabstand zwischen zwei Sitemap-Abrufen (manuell oder automatisch) |
 | `CLEANUP_OLD_POSTERS` | nein | `true` | Nach jedem Übertragen automatisch ältere, selbst hochgeladene Poster-Versionen in Plex löschen (siehe unten) |
@@ -76,9 +77,10 @@ reicht in Portainer **Stacks -> woke-score -> Pull and redeploy** (zieht das
 
 Änderungen an Umgebungsvariablen werden erst nach einem **Container-Redeploy**
 übernommen (Portainer: **Update the stack**, nicht nur die Seite neu laden).
-`BADGE_LABEL_STYLE` wirkt sich außerdem nur auf Poster aus, die *ab jetzt* neu
-angewendet werden - der Text ist fest ins Bild gebrannt und ändert sich bei
-schon vorher angewendeten Postern nicht rückwirkend von selbst.
+`BADGE_LABEL_STYLE` und `BADGE_WIDTH_PERCENT` wirken sich außerdem nur auf
+Poster aus, die *ab jetzt* neu angewendet werden - Text und Größe sind fest
+ins Bild gebrannt und ändern sich bei schon vorher angewendeten Postern nicht
+rückwirkend von selbst.
 
 ### PLEX_URL richtig setzen
 

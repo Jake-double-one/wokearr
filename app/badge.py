@@ -21,6 +21,12 @@ COLOR_RED    = (215, 45, 32)
 COLOR_WHITE  = (255, 255, 255)
 COLOR_SHADOW = (0, 0, 0, 140)
 
+# In jedes von uns erzeugte Poster gebrannter Marker (JPEG-Kommentar-Segment) -
+# damit app.py zuverlaessig erkennen kann "das ist ein eigener Badge-Upload",
+# unabhaengig davon, was Plex/plexapi als Poster-"provider" meldet (das hat
+# sich als nicht zuverlaessig erwiesen).
+BADGE_MARKER = b"wokearr-badge"
+
 
 def score_color(score: int):
     if score <= THRESH_GREEN_MAX:
@@ -115,5 +121,5 @@ def add_badge(poster_path: str, score: int, out_path: str, position: str = "top-
         draw.text((tx, ty), text, font=font, fill=COLOR_WHITE)
 
     result = Image.alpha_composite(img, overlay).convert("RGB")
-    result.save(out_path, quality=92)
+    result.save(out_path, quality=92, comment=BADGE_MARKER)
     return out_path

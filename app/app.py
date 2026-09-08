@@ -18,8 +18,9 @@ from pathlib import Path
 
 import requests
 from flask import Flask, jsonify, request, send_file, render_template
+from PIL import Image
 
-from badge import add_badge  # noqa: E402
+from badge import add_badge, BADGE_MARKER  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # CONFIG - kommt aus Umgebungsvariablen (siehe .env.example / docker-compose.yaml)
@@ -49,6 +50,10 @@ CACHE_REBUILD_COOLDOWN_SECONDS = int(os.environ.get("CACHE_REBUILD_COOLDOWN_MINU
 DATA_DIR = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent / "data")))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 CACHE_FILE = DATA_DIR / "score_cache.json"
+# Fallback-Cache fuer den Fall, dass Plex fuer einen Titel keinen Poster-
+# Kandidaten ohne unseren Badge-Marker mehr hat (siehe fetch_original_poster_bytes).
+ORIGINALS_DIR = DATA_DIR / "originals"
+ORIGINALS_DIR.mkdir(parents=True, exist_ok=True)
 # ---------------------------------------------------------------------------
 
 app = Flask(__name__)
@@ -91,53 +96,76 @@ def tmdb_id_from_item(item):
     return None
 
 
+def _is_own_badge(img_bytes: bytes) -> bool:
+    """Erkennt am eingebrannten JPEG-Kommentar, ob dieses Bild von add_badge()
+    erzeugt wurde (siehe badge.BADGE_MARKER) - zuverlaessiger als sich auf
+    Plex/plexapi-Metadaten wie "provider" zu verlassen (die waren es nicht)."""
+    try:
+        with Image.open(io.BytesIO(img_bytes)) as im:
+            return im.info.get("comment") == BADGE_MARKER
+    except Exception:
+        return False
+
+
+def _poster_candidate_bytes(plex, p) -> bytes | None:
+    key = getattr(p, "key", "") or ""
+    if not key:
+        return None
+    url = key if key.startswith("http") else plex.url(key, includeToken=True)
+    try:
+        return requests.get(url, timeout=20).content
+    except requests.RequestException:
+        return None
+
+
 def fetch_original_poster_bytes(plex, item) -> tuple[bytes, bool]:
     """
-    Holt das unbebadgte Original-Poster direkt von Plex' Agenten-Kandidaten
-    (z.B. TMDb) - NICHT das aktuell ausgewaehlte Poster, das ja unser eigener,
-    bereits bebadgter Upload sein kann. Plex behaelt Agenten-Poster als
-    Kandidaten dauerhaft (auch wenn ein eigener Upload ausgewaehlt ist), daher
-    ist das normalerweise immer die zuverlaessige Quelle fuer "das Original".
+    Holt das unbebadgte Original-Poster: geht alle Poster-Kandidaten in Plex
+    durch und nimmt den ersten, der NICHT unseren eigenen Badge-Marker traegt
+    (siehe _is_own_badge) - also z.B. das TMDb-Original, aber explizit nicht
+    einen frueheren eigenen Upload. Erkennung ueber den Bildinhalt, nicht ueber
+    Plex/plexapi-Metadaten wie "provider" (die haben sich als nicht
+    zuverlaessig erwiesen und konnten dazu fuehren, dass ein eigener,
+    schon bebadgter Upload faelschlich als "Original" behandelt wurde).
 
-    Gibt (bild_bytes, agent_poster_gefunden) zurueck. Faellt auf das aktuell
-    ausgewaehlte Poster zurueck, falls kein Agenten-Kandidat gefunden wird
-    (z.B. wenn Plex fuer den Titel keine TMDb-Metadaten mehr hat) - dabei kann
-    theoretisch ein bereits bebadgtes Poster erneut bebadgt werden. In diesem
-    Fall hilft ein "Metadaten aktualisieren" auf den Titel in Plex, damit
-    Plex den Original-Kandidaten neu laedt.
+    Findet Plex fuer den Titel gar keinen sauberen Kandidaten mehr (z.B. wenn
+    nur noch eigene Uploads existieren), wird auf den zuletzt lokal
+    zwischengespeicherten sauberen Stand zurueckgegriffen (ORIGINALS_DIR).
+    Gibt (bild_bytes, original_gefunden) zurueck.
     """
     try:
         for p in item.posters():
-            provider = (getattr(p, "provider", None) or "").lower()
-            key = getattr(p, "key", "") or ""
-            is_upload = provider in ("local", "upload") or key.startswith("upload://") or key.startswith("/upload")
-            if is_upload or not key:
+            data = _poster_candidate_bytes(plex, p)
+            if data is None or _is_own_badge(data):
                 continue
-            url = key if key.startswith("http") else plex.url(key, includeToken=True)
-            return requests.get(url, timeout=20).content, True
+            (ORIGINALS_DIR / f"{item.ratingKey}.jpg").write_bytes(data)
+            return data, True
     except Exception:
         pass
+
+    cached = ORIGINALS_DIR / f"{item.ratingKey}.jpg"
+    if cached.exists():
+        return cached.read_bytes(), True
+
     poster_url = plex.url(item.thumb, includeToken=True)
     return requests.get(poster_url, timeout=20).content, False
 
 
-def cleanup_old_uploaded_posters(item) -> int:
+def cleanup_old_uploaded_posters(plex, item) -> int:
     """
-    Loescht (best effort) aeltere, selbst hochgeladene Poster-Versionen dieses
-    Plex-Items - alles ausser der aktuell ausgewaehlten. Agenten-Poster (TMDb
-    usw.) lassen sich ueber die Plex-API ohnehin nicht loeschen, nur abwaehlen;
-    ein Loeschversuch dort schlaegt einfach folgenlos fehl. Die aktuell
-    ausgewaehlte Version wird nie angefasst.
+    Loescht (best effort) aeltere Poster-Versionen dieses Plex-Items, die
+    unseren eigenen Badge-Marker tragen (siehe _is_own_badge) - alles ausser
+    der aktuell ausgewaehlten. Ein Loeschversuch auf einen Agenten-Poster
+    (z.B. TMDb) kommt dank der Marker-Pruefung erst gar nicht vor; wuerde er
+    doch versucht, schlaegt er bei Plex einfach folgenlos fehl.
     """
     removed = 0
     try:
         for p in item.posters():
             if getattr(p, "selected", False):
                 continue
-            provider = (getattr(p, "provider", None) or "").lower()
-            key = getattr(p, "key", "") or ""
-            is_upload = provider in ("local", "upload") or key.startswith("upload://") or key.startswith("/upload")
-            if not is_upload:
+            data = _poster_candidate_bytes(plex, p)
+            if data is None or not _is_own_badge(data):
                 continue
             try:
                 p.delete()
@@ -320,7 +348,7 @@ def api_apply():
                     add_badge(str(src), entry["score"], str(dst), position=BADGE_POSITION, label_style=BADGE_LABEL_STYLE)
                     item.uploadPoster(filepath=str(dst))
                     if CLEANUP_OLD_POSTERS:
-                        cleanup_old_uploaded_posters(item)
+                        cleanup_old_uploaded_posters(plex, item)
                 if found_original:
                     JOBS[job_id]["log"].append(f"OK: {item.title}")
                 else:
@@ -365,7 +393,7 @@ def api_cleanup_posters():
             removed_total = 0
             for i, item in enumerate(items, 1):
                 try:
-                    removed_total += cleanup_old_uploaded_posters(item)
+                    removed_total += cleanup_old_uploaded_posters(plex, item)
                 except Exception as e:
                     JOBS[job_id]["log"].append(f"Fehler bei {getattr(item, 'title', '?')}: {e}")
                 JOBS[job_id]["progress"] = [i, len(items)]

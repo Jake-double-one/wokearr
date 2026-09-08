@@ -137,21 +137,6 @@ document.getElementById("btn-apply-all").addEventListener("click", () => {
   applyBadges(ITEMS.map(i => i.ratingKey));
 });
 
-document.getElementById("btn-reset-originals").addEventListener("click", async () => {
-  const ok = confirm(
-    "Zwischengespeicherte Original-Poster löschen?\n\n" +
-    "Wichtig: Setzt vorher in Plex das Poster der betroffenen Titel manuell zurück " +
-    "(Poster anklicken -> Poster wählen -> Original-Poster auswählen), sonst wird " +
-    "beim nächsten Anwenden das aktuelle (evtl. noch doppelt gebadgte) Plex-Poster " +
-    "erneut als Original übernommen."
-  );
-  if (!ok) return;
-  const res = await fetch("/api/reset-originals", { method: "POST" });
-  const data = await res.json();
-  showToast(`Poster-Cache geleert (${data.removed} Datei(en)). Betroffene Titel jetzt erneut anwenden.`);
-  setTimeout(hideToast, 6000);
-});
-
 document.getElementById("btn-cleanup-posters").addEventListener("click", async () => {
   const ok = confirm(
     "Alte, selbst hochgeladene Poster-Versionen in der gesamten Plex-Bibliothek löschen?\n\n" +

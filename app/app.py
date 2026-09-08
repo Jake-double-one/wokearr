@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Woke-Score Dashboard - kleine lokale Web-UI (Radarr/Sonarr-Stil) fuer
-Ampel-Badges auf Plex-Postern, Score-Quelle: isitwokeornot.com
+Wokearr - kleine lokale Web-UI (Radarr/Sonarr-Stil) fuer Ampel-Badges auf
+Plex-Postern, Score-Quelle: isitwokeornot.com
 
 Konfiguration erfolgt ausschliesslich ueber Umgebungsvariablen (siehe .env.example),
 damit das Image ohne Aenderungen am Code auf GitHub/Docker Hub veroeffentlicht
@@ -49,11 +49,6 @@ CACHE_REBUILD_COOLDOWN_SECONDS = int(os.environ.get("CACHE_REBUILD_COOLDOWN_MINU
 DATA_DIR = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent / "data")))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 CACHE_FILE = DATA_DIR / "score_cache.json"
-# Unbebadgte Original-Poster, einmal pro Titel zwischengespeichert - sorgt dafuer,
-# dass ein erneutes "Anwenden" den Badge immer frisch auf das Original brennt statt
-# auf ein Poster, das schon einen Badge traegt (sonst ueberlagern sich die Kreise).
-ORIGINALS_DIR = DATA_DIR / "originals"
-ORIGINALS_DIR.mkdir(parents=True, exist_ok=True)
 # ---------------------------------------------------------------------------
 
 app = Flask(__name__)
@@ -94,6 +89,31 @@ def tmdb_id_from_item(item):
         if guid.id.startswith("tmdb://"):
             return guid.id.split("tmdb://", 1)[1]
     return None
+
+
+def fetch_original_poster_bytes(plex, item) -> bytes:
+    """
+    Holt das unbebadgte Original-Poster direkt von Plex' Agenten-Kandidaten
+    (z.B. TMDb) - NICHT das aktuell ausgewaehlte Poster, das ja unser eigener,
+    bereits bebadgter Upload sein kann. Plex behaelt Agenten-Poster als
+    Kandidaten dauerhaft (auch wenn ein eigener Upload ausgewaehlt ist), daher
+    ist das immer die zuverlaessige Quelle fuer "das Original". Faellt nur auf
+    das aktuell ausgewaehlte Poster zurueck, falls kein Agenten-Kandidat
+    gefunden wird (z.B. sehr seltene Faelle ohne Metadaten-Match).
+    """
+    try:
+        for p in item.posters():
+            provider = (getattr(p, "provider", None) or "").lower()
+            key = getattr(p, "key", "") or ""
+            is_upload = provider in ("local", "upload") or key.startswith("upload://") or key.startswith("/upload")
+            if is_upload or not key:
+                continue
+            url = key if key.startswith("http") else plex.url(key, includeToken=True)
+            return requests.get(url, timeout=20).content
+    except Exception:
+        pass
+    poster_url = plex.url(item.thumb, includeToken=True)
+    return requests.get(poster_url, timeout=20).content
 
 
 def cleanup_old_uploaded_posters(item) -> int:
@@ -283,16 +303,10 @@ def api_apply():
                 if not entry:
                     continue
 
-                # Original (unbebadgtes) Poster einmalig sichern und danach immer
-                # davon ausgehen - verhindert, dass ein Badge auf ein bereits
-                # bebadgtes Poster gebrannt wird (doppelte/ueberlagerte Kreise).
-                original_path = ORIGINALS_DIR / f"{rk}.jpg"
-                if original_path.exists():
-                    img_bytes = original_path.read_bytes()
-                else:
-                    poster_url = plex.url(item.thumb, includeToken=True)
-                    img_bytes = requests.get(poster_url, timeout=20).content
-                    original_path.write_bytes(img_bytes)
+                # Immer das unbebadgte Original von Plex' Agenten-Kandidaten holen
+                # (nie das aktuell ausgewaehlte Poster - das kann unser eigener,
+                # bereits bebadgter Upload sein) - verhindert doppelte Badges.
+                img_bytes = fetch_original_poster_bytes(plex, item)
 
                 with tempfile.TemporaryDirectory() as tmp:
                     src = Path(tmp) / "src.jpg"
@@ -348,27 +362,6 @@ def api_cleanup_posters():
 
     threading.Thread(target=run, daemon=True).start()
     return jsonify({"job_id": job_id})
-
-
-@app.route("/api/reset-originals", methods=["POST"])
-def api_reset_originals():
-    """
-    Loescht die zwischengespeicherten Original-Poster (siehe ORIGINALS_DIR).
-    Noetig, falls ein Poster schon VOR dem Doppel-Badge-Fix mehrfach "Anwenden"
-    durchlaufen hat - dann wurde versehentlich ein bereits bebadgtes Poster als
-    "Original" gecacht. Ersetzt NICHT das aktuell in Plex ausgewaehlte Poster;
-    dieses sollte vorher manuell in Plex zurueckgesetzt werden (Poster waehlen),
-    sonst wird beim naechsten "Anwenden" wieder das (noch doppelte) Plex-Poster
-    als neues "Original" uebernommen.
-    """
-    removed = 0
-    for f in ORIGINALS_DIR.glob("*.jpg"):
-        try:
-            f.unlink()
-            removed += 1
-        except OSError:
-            pass
-    return jsonify({"removed": removed})
 
 
 @app.route("/api/job/<job_id>")

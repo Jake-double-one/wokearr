@@ -19,16 +19,27 @@ function render() {
     const band = scoreBand(item.score);
     const card = document.createElement("div");
     card.className = "card";
+    const sourceUrl = item.sourceUrl || "https://isitwokeornot.com/";
     card.innerHTML = `
       <img src="/api/poster/${item.ratingKey}" alt="${item.title}" loading="lazy">
       <div class="badge badge-${band}">${item.score}%</div>
       <div class="card-overlay">
         <div class="card-title">${item.title}</div>
         <div class="card-year">${item.year || ""}</div>
-        <button class="card-apply" data-key="${item.ratingKey}">Anwenden</button>
+        <div class="card-actions">
+          <button class="card-apply" data-key="${item.ratingKey}">Anwenden</button>
+          <a class="source-link" href="${sourceUrl}" target="_blank" rel="noopener noreferrer" title="Quelle: isitwokeornot.com">
+            <img class="source-icon" src="https://isitwokeornot.com/favicon.ico" alt="isitwokeornot.com">
+          </a>
+        </div>
       </div>
     `;
     grid.appendChild(card);
+
+    const sourceIcon = card.querySelector(".source-icon");
+    sourceIcon.addEventListener("error", () => {
+      sourceIcon.outerHTML = '<span class="source-icon-fallback">&#8599;</span>';
+    }, { once: true });
   }
 
   grid.querySelectorAll(".card-apply").forEach(btn => {

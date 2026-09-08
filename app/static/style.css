@@ -150,8 +150,13 @@ main { padding: 20px; }
 .card-title { font-weight: 600; font-size: 13px; line-height: 1.25; margin-bottom: 2px; }
 .card-year { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
 
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .card-apply {
-  align-self: flex-start;
   background: var(--accent);
   color: var(--accent-text);
   border: none;
@@ -163,7 +168,31 @@ main { padding: 20px; }
 }
 .card-apply:disabled { background: var(--muted); cursor: default; }
 
+.source-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.source-link:hover { background: rgba(255, 255, 255, 0.18); }
+.source-icon { width: 14px; height: 14px; object-fit: contain; border-radius: 2px; }
+.source-icon-fallback { color: var(--text); font-size: 13px; font-weight: 700; line-height: 1; }
+
 .empty-state { color: var(--muted); text-align: center; padding: 60px 0; }
+
+.app-footer {
+  padding: 16px 20px 28px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  border-top: 1px solid var(--border);
+}
+.app-footer a { color: var(--muted); }
+.app-footer a:hover { color: var(--text); }
 
 .toast {
   position: fixed;

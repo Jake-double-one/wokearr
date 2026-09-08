@@ -9,6 +9,10 @@ auf dem Score von [isitwokeornot.com](https://isitwokeornot.com/).
   pro Titel führen
 - Original-Poster bleibt Basis, die Badge wird nur oben drauf gerendert und als
   neues Poster in Plex hochgeladen
+- **Autopilot:** einmal `AUTO_SYNC_INTERVAL_MINUTES` gesetzt, läuft alles von
+  selbst - neue Titel bekommen automatisch ihren Score, ihr Original-Poster
+  und ihren Badge, entfernte Titel werden aufgeräumt (siehe
+  [Autopilot](#autopilot---automatischer-betrieb))
 
 ## Screenshot
 
@@ -62,7 +66,7 @@ reicht in Portainer **Stacks -> woke-score -> Pull and redeploy** (zieht das
 | `LIBRARY_SECTIONS`  | nein    | `Filme,Serien`  | Exakte Namen eurer Plex-Bibliotheken, kommagetrennt |
 | `BADGE_POSITION`    | nein    | `top-right`     | `top-right` \| `top-left` \| `bottom-right` \| `bottom-left` |
 | `BADGE_LABEL_STYLE` | nein    | `percent`       | `percent` (`37%`) \| `woke` (`37% woke`) |
-| `CACHE_AUTO_REFRESH_MINUTES` | nein | `0` (aus) | Intervall in Minuten für automatischen, inkrementellen Sitemap-Abgleich im Hintergrund |
+| `AUTO_SYNC_INTERVAL_MINUTES` | nein | `0` (aus) | Intervall in Minuten für den kompletten Autopilot-Lauf (Score-Sync, Poster-Cache, aufräumen, automatisch anwenden). `60` für stündlich. |
 | `CACHE_REBUILD_COOLDOWN_MINUTES` | nein | `5` | Mindestabstand zwischen zwei Sitemap-Abrufen (manuell oder automatisch) |
 | `CLEANUP_OLD_POSTERS` | nein | `true` | Nach jedem Anwenden automatisch ältere, selbst hochgeladene Poster-Versionen in Plex löschen (siehe unten) |
 
@@ -93,41 +97,57 @@ SSL-/Verbindungsfehler im Log (z. B. `TLSV1_UNRECOGNIZED_NAME` oder
 Richtig: `PLEX_URL=http://192.168.1.10:32400`
 Falsch: `https://192.168.1.10`, `192.168.1.10:32400` (ohne Schema), `http://192.168.1.10` (ohne Port)
 
-Der Score-Cache (`score_cache.json`) und ein Fallback-Cache für Original-Poster
-(`originals/`, siehe unten) liegen im Volume `/data` und überstehen
-Container-Neustarts/-Updates.
+Der Score-Cache (`score_cache.json`), der Original-Poster-Cache (`originals/`)
+und der Zustand des Autopiloten (`applied_state.json`) liegen im Volume
+`/data` und überstehen Container-Neustarts/-Updates.
 
-## Bedienung
+## Autopilot - automatischer Betrieb
 
-1. **Cache aktualisieren** – crawlt die Sitemap von isitwokeornot.com
-   parallel (4 Worker) und speichert Score + TMDb-/IMDb-ID lokal. Bereits
-   vollständig gecachte Titel werden dabei übersprungen – ein erneuter Lauf
-   fragt also nur neue/fehlende Titel ab und ist entsprechend schnell. Der
-   Cache-Aufbau läuft als Hintergrund-Prozess im Container weiter, auch wenn
-   ihr die Seite neu ladet, filtert oder den Browser-Tab schließt.
-2. **Kompletter Neuaufbau** – fragt wirklich alle Titel erneut ab (z. B. um
-   zwischenzeitlich geänderte Scores auf isitwokeornot.com nachzuziehen).
-   Dauert entsprechend länger als "Cache aktualisieren".
-3. Beide Buttons teilen sich einen Cooldown (`CACHE_REBUILD_COOLDOWN_MINUTES`,
-   Standard 5 Minuten) seit dem letzten Sitemap-Abruf – egal ob manuell oder
-   automatisch ausgelöst. Ein zu früher Klick zeigt stattdessen an, wie lange
-   noch zu warten ist. Das schützt isitwokeornot.com vor zu vielen Anfragen
-   (Spam-Schutz).
-4. Optional automatisch im Hintergrund: `CACHE_AUTO_REFRESH_MINUTES` auf ein
-   Intervall > 0 setzen, dann wird "Cache aktualisieren" (inkrementell)
-   automatisch in diesem Abstand ausgeführt, ohne dass ihr die UI öffnen müsst.
-5. Das Poster-Grid zeigt automatisch nur Titel eurer Plex-Bibliothek, zu denen
-   ein Score gefunden wurde.
-6. **Anwenden** (einzeln oder "Alle anwenden") holt sich für den Badge immer
-   das unbebadgte Original-Poster von Plex' Poster-Kandidaten (z. B. TMDb) -
-   erkannt an einem unsichtbaren Marker, den jedes von Wokearr erzeugte
-   Poster trägt, nie am aktuell ausgewählten Poster (das ja der eigene, schon
-   bebadgte Upload sein kann). Findet sich kein sauberer Kandidat mehr in
-   Plex, greift ein lokaler Fallback-Cache (`/data/originals`); gibt es auch
-   den nicht, meldet die App das nach dem Anwenden mit den betroffenen Titeln
-   (Fix: in Plex "Metadaten aktualisieren", danach erneut anwenden). Normalerweise
-   bleibt so bei wiederholtem Anwenden immer nur ein Badge sichtbar, ohne
-   manuelle Schritte in Plex.
+`AUTO_SYNC_INTERVAL_MINUTES` auf ein Intervall > 0 setzen (z. B. `60` für
+stündlich) und Wokearr läuft komplett von selbst, ohne dass ihr die UI
+anfassen müsst. Jeder Durchlauf macht der Reihe nach:
+
+1. **Score-Sync** – neue/fehlende Titel bei isitwokeornot.com nachziehen
+   (inkrementell, wie gehabt).
+2. **Original-Poster nachladen** – für jeden Titel eurer Plex-Bibliothek mit
+   bekanntem Score, der noch kein lokal gecachtes Original hat: das saubere
+   Original von Plex holen (erkannt über einen unsichtbaren Marker, den jedes
+   von Wokearr erzeugte Poster trägt) und lokal speichern (`/data/originals`).
+3. **Entfernte Titel aufräumen** – lokale Original-Dateien für Titel löschen,
+   die nicht mehr in eurer Plex-Bibliothek stehen. Nutzt die in Schritt 2
+   ohnehin abgefragte Bibliotheksliste, kostet also keinen zusätzlichen
+   Plex-Request.
+4. **Automatisch anwenden** – neue Titel (noch nie gebadgt) oder Titel mit
+   geändertem Score bekommen automatisch ihren Badge gebrannt und werden nach
+   Plex hochgeladen; alte eigene Poster-Versionen werden dabei wie gewohnt
+   aufgeräumt (siehe unten). Titel, die schon mit ihrem aktuellen Score
+   gebadgt sind, werden übersprungen - jeder Lauf im Normalbetrieb ist also
+   ein schneller No-Op-Check, kein voller Durchlauf durch die Bibliothek.
+
+Button **"Jetzt synchronisieren"** stößt genau diesen Durchlauf sofort manuell
+an, ohne auf den nächsten Cron-Tick zu warten - praktisch zum Testen.
+
+Der Score-Sync-Schritt teilt sich mit den manuellen Buttons unten einen
+gemeinsamen Cooldown (`CACHE_REBUILD_COOLDOWN_MINUTES`, Standard 5 Minuten)
+seit dem letzten Sitemap-Abruf, damit isitwokeornot.com nicht zu häufig
+angefragt wird - ein zu früher Lauf überspringt Stufe 1 einfach und macht mit
+Stufe 2-4 weiter.
+
+## Manuelle Bedienung
+
+Für den Normalbetrieb mit aktivem Autopiloten nicht nötig, aber nützlich zum
+gezielten Eingreifen:
+
+- **Cache aktualisieren** – nur Stufe 1 (Score-Sync), inkrementell.
+- **Kompletter Neuaufbau** – fragt wirklich alle Titel bei isitwokeornot.com
+  erneut ab (z. B. um zwischenzeitlich geänderte Scores nachzuziehen). Dauert
+  entsprechend länger.
+- **Anwenden** (einzeln oder "Alle anwenden") – brennt den Badge sofort für
+  ausgewählte Titel, unabhängig vom Autopilot-Status.
+- **Alte Poster in Plex löschen** – siehe nächster Abschnitt.
+
+Alle Jobs laufen als Hintergrund-Prozess im Container weiter, auch wenn ihr
+die Seite neu ladet, filtert oder den Browser-Tab schließt.
 
 ### Plex sammelt alte Poster-Versionen an
 

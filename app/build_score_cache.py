@@ -72,6 +72,7 @@ def extract_one(url: str) -> dict | None:
             "imdb_id": imdb_match.group(1) if imdb_match else None,
             "slug": slug,
             "media_type": media_type,
+            "url": url,
         }
     except requests.RequestException:
         return None
@@ -93,7 +94,10 @@ def build_cache(cache: dict, on_progress=None, skip_existing: bool = True) -> tu
     """
     urls = get_title_urls()
     if skip_existing:
-        known_slugs = {e["slug"] for e in cache.values() if e.get("slug")}
+        # Nur Slugs, die schon vollstaendig sind (inkl. "url"), gelten als erledigt -
+        # so werden aeltere Cache-Eintraege ohne "url" (vor Einfuehrung dieses Felds)
+        # beim naechsten Lauf automatisch einmalig nachgezogen statt fuer immer zu fehlen.
+        known_slugs = {e["slug"] for e in cache.values() if e.get("slug") and e.get("url")}
         urls = [u for u in urls if u.rstrip("/").rsplit("/", 1)[-1] not in known_slugs]
 
     total = len(urls)

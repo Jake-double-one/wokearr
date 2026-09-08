@@ -93,7 +93,8 @@ SSL-/Verbindungsfehler im Log (z. B. `TLSV1_UNRECOGNIZED_NAME` oder
 Richtig: `PLEX_URL=http://192.168.1.10:32400`
 Falsch: `https://192.168.1.10`, `192.168.1.10:32400` (ohne Schema), `http://192.168.1.10` (ohne Port)
 
-Der Score-Cache (`score_cache.json`) liegt im Volume `/data` und übersteht
+Der Score-Cache (`score_cache.json`) und ein Fallback-Cache für Original-Poster
+(`originals/`, siehe unten) liegen im Volume `/data` und überstehen
 Container-Neustarts/-Updates.
 
 ## Bedienung
@@ -118,11 +119,15 @@ Container-Neustarts/-Updates.
 5. Das Poster-Grid zeigt automatisch nur Titel eurer Plex-Bibliothek, zu denen
    ein Score gefunden wurde.
 6. **Anwenden** (einzeln oder "Alle anwenden") holt sich für den Badge immer
-   das unbebadgte Original-Poster direkt von Plex' Agenten-Kandidaten (z. B.
-   TMDb) - nie das aktuell ausgewählte Poster, das ja der eigene, schon
-   bebadgte Upload sein kann. Dadurch bleibt auch bei wiederholtem Anwenden
-   (z. B. nach einem geänderten Score) immer nur ein Badge sichtbar, egal wie
-   oft ihr den Titel erneut anwendet - keine manuellen Schritte in Plex nötig.
+   das unbebadgte Original-Poster von Plex' Poster-Kandidaten (z. B. TMDb) -
+   erkannt an einem unsichtbaren Marker, den jedes von Wokearr erzeugte
+   Poster trägt, nie am aktuell ausgewählten Poster (das ja der eigene, schon
+   bebadgte Upload sein kann). Findet sich kein sauberer Kandidat mehr in
+   Plex, greift ein lokaler Fallback-Cache (`/data/originals`); gibt es auch
+   den nicht, meldet die App das nach dem Anwenden mit den betroffenen Titeln
+   (Fix: in Plex "Metadaten aktualisieren", danach erneut anwenden). Normalerweise
+   bleibt so bei wiederholtem Anwenden immer nur ein Badge sichtbar, ohne
+   manuelle Schritte in Plex.
 
 ### Plex sammelt alte Poster-Versionen an
 

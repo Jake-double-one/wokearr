@@ -2,13 +2,14 @@ version: "3.8"
 
 services:
   woke-score:
-    # Fuer Portainer "Stacks -> Repository": baut direkt aus diesem Repo.
-    build:
-      context: .
-      dockerfile: Dockerfile
-    # Alternative, sobald per GitHub Actions ein Image veroeffentlicht wurde
-    # (siehe .github/workflows/docker-publish.yml) - dann "build:" oben entfernen:
-    # image: ghcr.io/jake-double-one/wokearr:latest
+    # Fertiges Image aus der GitHub Action (.github/workflows/docker-publish.yml).
+    # Fuer eine feste Version statt "latest" z.B. ":v0.1.0" verwenden.
+    image: ghcr.io/jake-double-one/wokearr:latest
+    # Alternative: selbst aus diesem Repo bauen (z.B. fuer eigene Anpassungen) -
+    # dann die "image:"-Zeile oben entfernen/auskommentieren und stattdessen:
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     container_name: woke-score
     restart: unless-stopped
     ports:

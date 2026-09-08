@@ -185,22 +185,34 @@ def cleanup_old_uploaded_posters(plex, item) -> int:
     der aktuell ausgewaehlten. Ein Loeschversuch auf einen Agenten-Poster
     (z.B. TMDb) kommt dank der Marker-Pruefung erst gar nicht vor; wuerde er
     doch versucht, schlaegt er bei Plex einfach folgenlos fehl.
+
+    Loggt jeden Kandidaten samt Entscheidung/Ergebnis nach stdout (sichtbar in
+    den Container-Logs) - Diagnose-Hilfe, falls Plex/plexapi sich hier anders
+    verhaelt als erwartet (war schon einmal der Fall bei provider/key).
     """
     removed = 0
     try:
-        for p in item.posters():
-            if getattr(p, "selected", False):
-                continue
-            data = _poster_candidate_bytes(plex, p)
-            if _is_own_badge(data) is not True:
-                continue
-            try:
-                p.delete()
-                removed += 1
-            except Exception:
-                pass
-    except Exception:
-        pass
+        candidates = list(item.posters())
+    except Exception as e:
+        print(f"[cleanup] {item.title}: item.posters() fehlgeschlagen: {e}", flush=True)
+        return 0
+
+    for p in candidates:
+        key = getattr(p, "key", "?")
+        if getattr(p, "selected", False):
+            print(f"[cleanup] {item.title}: uebersprungen (aktuell ausgewaehlt) - {key}", flush=True)
+            continue
+        data = _poster_candidate_bytes(plex, p)
+        marker = _is_own_badge(data)
+        if marker is not True:
+            print(f"[cleanup] {item.title}: uebersprungen (kein eigener Marker, Ergebnis={marker}) - {key}", flush=True)
+            continue
+        try:
+            p.delete()
+            removed += 1
+            print(f"[cleanup] {item.title}: geloescht - {key}", flush=True)
+        except Exception as e:
+            print(f"[cleanup] {item.title}: Loeschen fehlgeschlagen ({e}) - {key}", flush=True)
     return removed
 
 
@@ -453,17 +465,25 @@ def api_library():
 
 @app.route("/api/poster/<rating_key>")
 def api_poster(rating_key):
-    """Proxied Poster - haelt den Plex-Token aus dem Browser raus."""
+    """Proxied Poster - haelt den Plex-Token aus dem Browser raus.
+
+    Explizit nicht cachebar: das zugrundeliegende Plex-Poster kann sich durch
+    Anwenden/Autopilot jederzeit aendern, die URL selbst bleibt aber gleich -
+    ohne "no-store" wuerde der Browser sonst dauerhaft einen alten (z.B. noch
+    doppelt bebadgten) Stand anzeigen, obwohl in Plex laengst das aktuelle
+    Poster liegt."""
     demo = next((d for d in DEMO_ITEMS if d["ratingKey"] == rating_key), None)
     if demo:
         img = requests.get(demo["poster"], timeout=15).content
-        return send_file(io.BytesIO(img), mimetype="image/jpeg")
+    else:
+        plex = get_plex()
+        item = plex.fetchItem(int(rating_key))
+        poster_url = plex.url(item.thumb, includeToken=True)
+        img = requests.get(poster_url, timeout=15).content
 
-    plex = get_plex()
-    item = plex.fetchItem(int(rating_key))
-    poster_url = plex.url(item.thumb, includeToken=True)
-    img = requests.get(poster_url, timeout=15).content
-    return send_file(io.BytesIO(img), mimetype="image/jpeg")
+    resp = send_file(io.BytesIO(img), mimetype="image/jpeg")
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 @app.route("/api/rebuild-cache", methods=["POST"])

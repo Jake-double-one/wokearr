@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
-Wokearr - kleine lokale Web-UI (Radarr/Sonarr-Stil) fuer Ampel-Badges auf
-Plex-Postern, Score-Quelle: isitwokeornot.com
+Wokearr - small local web UI (Radarr/Sonarr style) for traffic-light badges
+on Plex posters, score source: isitwokeornot.com
 
-Konfiguration erfolgt ausschliesslich ueber Umgebungsvariablen (siehe .env.example),
-damit das Image ohne Aenderungen am Code auf GitHub/Docker Hub veroeffentlicht
-werden kann.
+Configuration is done entirely via environment variables (see .env.example),
+so the image can be published to GitHub/Docker Hub without any code changes.
 """
 import io
 import json
@@ -25,7 +24,7 @@ from PIL import Image
 from badge import add_badge, BADGE_MARKER  # noqa: E402
 
 # ---------------------------------------------------------------------------
-# CONFIG - kommt aus Umgebungsvariablen (siehe .env.example / docker-compose.yaml)
+# CONFIG - comes from environment variables (see .env.example / docker-compose.yaml)
 # ---------------------------------------------------------------------------
 PLEX_URL = os.environ.get("PLEX_URL", "").rstrip("/")
 PLEX_TOKEN = os.environ.get("PLEX_TOKEN", "")
@@ -35,8 +34,8 @@ BADGE_LABEL_STYLE = os.environ.get("BADGE_LABEL_STYLE", "percent")
 if BADGE_LABEL_STYLE not in ("percent", "woke"):
     BADGE_LABEL_STYLE = "percent"
 
-# Breite der Badge relativ zur Posterbreite, in Prozent. Mindestbreite fest bei
-# 20% verankert, sonst wird die Badge auf kleineren Postern schnell unleserlich.
+# Badge width relative to poster width, in percent. Hard-floored at 20%,
+# otherwise the badge quickly becomes unreadable on smaller posters.
 BADGE_WIDTH_MIN_PERCENT = 20.0
 try:
     BADGE_WIDTH_PERCENT = float(os.environ.get("BADGE_WIDTH_PERCENT", "20"))
@@ -44,9 +43,9 @@ except ValueError:
     BADGE_WIDTH_PERCENT = BADGE_WIDTH_MIN_PERCENT
 BADGE_WIDTH_PERCENT = max(BADGE_WIDTH_PERCENT, BADGE_WIDTH_MIN_PERCENT)
 
-# Sprache der UI (Template, JS-Toasts, Job-Logs/Fehlermeldungen im Browser).
-# en-US ist Default UND Fallback fuer einzelne fehlende Keys in anderen
-# Sprachen (z.B. eine unvollstaendige, spaeter beigetragene dritte Sprache).
+# UI language (template, JS toasts, job logs/error messages in the browser).
+# en-US is the default AND the fallback for individual missing keys in other
+# languages (e.g. an incomplete third language contributed later).
 DEFAULT_LANGUAGE = "en-US"
 LOCALES_DIR = Path(__file__).parent / "locales"
 LANGUAGE = os.environ.get("LANGUAGE", DEFAULT_LANGUAGE)
@@ -61,13 +60,13 @@ def _load_locale(lang: str) -> dict:
 
 _FALLBACK_TRANSLATIONS = _load_locale(DEFAULT_LANGUAGE)
 if LANGUAGE != DEFAULT_LANGUAGE and not (LOCALES_DIR / f"{LANGUAGE}.json").exists():
-    print(f"[i18n] Keine Locale-Datei fuer LANGUAGE={LANGUAGE!r} gefunden, falle auf {DEFAULT_LANGUAGE} zurueck.",
+    print(f"[i18n] No locale file found for LANGUAGE={LANGUAGE!r}, falling back to {DEFAULT_LANGUAGE}.",
           flush=True)
-    # LANGUAGE selbst mit zurueckfallen lassen (nicht nur einzelne Keys) - sonst
-    # zeigt z.B. <html lang="fr"> auf tatsaechlich komplett englischen Text.
+    # Fall LANGUAGE itself back too (not just individual keys) - otherwise
+    # e.g. <html lang="fr"> would show on text that's actually all English.
     LANGUAGE = DEFAULT_LANGUAGE
-# Pro Key: aktive Sprache, sonst en-US - so ist jeder Key garantiert vorhanden,
-# ohne dass Frontend/Backend selbst eine Fallback-Logik nachbauen muessen.
+# Per key: active language, else en-US - so every key is guaranteed to
+# exist, without frontend/backend having to rebuild their own fallback logic.
 TRANSLATIONS = {**_FALLBACK_TRANSLATIONS, **_load_locale(LANGUAGE)}
 
 
@@ -78,48 +77,48 @@ def t(key: str, **kwargs) -> str:
     try:
         return template.format(**kwargs)
     except (KeyError, IndexError):
-        # Kaputtes/inkonsistentes Uebersetzungs-Template darf nie einen
-        # Request zum Absturz bringen - im Zweifel unformatiert anzeigen.
+        # A broken/inconsistent translation template must never crash a
+        # request - show it unformatted rather than fail.
         return template
 
-# Plex behaelt bei jedem uploadPoster() die vorherige Version als Poster-Historie
-# und loescht sie nie von selbst - laesst den Plex-Server sonst zuwachsen. Nach
-# jedem Anwenden werden deshalb standardmaessig aeltere, selbst hochgeladene
-# Versionen entfernt (Original-/Agent-Poster wie TMDb bleiben unangetastet).
+# Plex keeps the previous version of every uploaded poster as poster history
+# and never deletes it on its own - otherwise the Plex server just keeps
+# growing. So after every push, older self-uploaded versions are removed by
+# default (original/agent posters like TMDb are left untouched).
 CLEANUP_OLD_POSTERS = os.environ.get("CLEANUP_OLD_POSTERS", "true").strip().lower() not in ("false", "0", "no")
 
-# Anwenden/Aufraeumen lesen pro Titel mehrere Poster-Kandidaten von Plex herunter
-# (um unseren Badge-Marker zu pruefen) - I/O-lastig, daher parallel wie beim
-# Cache-Aufbau statt einen Titel nach dem anderen abzuarbeiten.
+# Push/cleanup download several poster candidates from Plex per title (to
+# check our badge marker) - I/O-heavy, hence parallelized like the cache
+# build instead of processing one title after another.
 POSTER_WORKERS = 4
 
-# Autopilot-Intervall (Minuten): Score-Sync, Original-Poster-Cache pflegen,
-# entfernte Titel aufraeumen UND neue/geaenderte Titel automatisch badgen und
-# nach Plex hochladen - alles in einem Takt. 0 = deaktiviert (Standard), dann
-# nur ueber die Buttons in der UI. Fuer echten "faehrt von allein"-Betrieb z.B.
-# auf 60 setzen. Ersetzt das fruehere CACHE_AUTO_REFRESH_MINUTES (nur Scores).
+# Autopilot interval (minutes): score sync, maintain the original-poster
+# cache, clean up removed titles, AND automatically badge and upload
+# new/changed titles to Plex - all in one cadence. 0 = disabled (default),
+# then only via the buttons in the UI. For a true "runs on its own" setup,
+# e.g. set to 60. Replaces the earlier CACHE_AUTO_REFRESH_MINUTES (scores only).
 AUTO_SYNC_INTERVAL_MINUTES = int(os.environ.get("AUTO_SYNC_INTERVAL_MINUTES", "0") or "0")
-# Mindestabstand zwischen zwei Sitemap-Abrufen (manuell oder automatisch), damit
-# isitwokeornot.com nicht durch Spam-Klicks oder eine zu knappe Cron-Angabe
-# ueberlastet wird.
+# Minimum gap between two sitemap fetches (manual or automatic), so
+# isitwokeornot.com isn't overloaded by spam clicks or a too-tight cron
+# schedule.
 CACHE_REBUILD_COOLDOWN_SECONDS = int(os.environ.get("CACHE_REBUILD_COOLDOWN_MINUTES", "5") or "5") * 60
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent / "data")))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 CACHE_FILE = DATA_DIR / "score_cache.json"
-# Original-Poster-Cache: unbebadgt, direkt von Plex' Agenten-Kandidaten geholt.
-# An Plex' ratingKey gebunden, wird vom Autopilot fuer die ganze Bibliothek
-# warmgehalten und um entfernte Titel bereinigt.
+# Original-poster cache: unbadged, fetched directly from Plex's agent
+# candidates. Keyed by Plex's ratingKey, kept warm for the whole library by
+# the autopilot and cleaned up for removed titles.
 ORIGINALS_DIR = DATA_DIR / "originals"
 ORIGINALS_DIR.mkdir(parents=True, exist_ok=True)
-# Gebrandete Poster: Score bereits reingebrannt, aber noch nicht zu Plex
-# hochgeladen - eigener Schritt, damit man sich das Ergebnis vor dem Push
-# lokal ansehen kann (siehe render_branded_image/push_to_plex).
+# Branded posters: score already burned in, but not yet uploaded to Plex -
+# its own step, so the result can be checked locally before the push (see
+# render_branded_image/push_to_plex).
 BRANDED_DIR = DATA_DIR / "branded"
 BRANDED_DIR.mkdir(parents=True, exist_ok=True)
-# Merkt sich pro ratingKey, mit welchem Score zuletzt gerendert bzw. zu Plex
-# hochgeladen wurde - so erkennt der Autopilot neue/geaenderte Titel, ohne
-# jedes Mal alles neu zu rendern/hochzuladen.
+# Tracks, per ratingKey, which score was last rendered/uploaded to Plex - so
+# the autopilot recognizes new/changed titles without re-rendering/
+# re-uploading everything every time.
 RENDERED_STATE_FILE = DATA_DIR / "rendered_state.json"
 PUSHED_STATE_FILE = DATA_DIR / "pushed_state.json"
 # ---------------------------------------------------------------------------
@@ -129,7 +128,7 @@ app.jinja_env.globals["t"] = t
 JOBS = {}  # job_id -> {"state": "running"/"done"/"error", "progress": [n, total], "log": [...]}
 
 _rebuild_lock = threading.Lock()
-_last_rebuild_started = 0.0  # epoch seconds - schuetzt isitwokeornot.com vor zu haeufigen Abrufen
+_last_rebuild_started = 0.0  # epoch seconds - protects isitwokeornot.com from too-frequent fetches
 _state_lock = threading.Lock()
 
 PLEX_TYPE_TO_CACHE_PREFIX = {"movie": "movie", "show": "tv"}
@@ -166,9 +165,9 @@ def tmdb_id_from_item(item):
     return None
 
 
-# UTM-Parameter auf Links zu Review-Seiten von isitwokeornot.com, damit der
-# Betreiber sehen kann, wie viel Traffic Wokearr ihm zufuehrt (auf dessen
-# eigenen Wunsch hin).
+# UTM parameters on links to review pages on isitwokeornot.com, so the
+# operator can see how much traffic Wokearr sends them (at their own
+# request).
 REVIEW_LINK_UTM = {"utm_source": "wokearr", "utm_medium": "referral", "utm_campaign": "poster_badge"}
 
 
@@ -183,15 +182,15 @@ def _with_utm(url: str | None) -> str | None:
 
 def _is_own_badge(img_bytes: bytes | None) -> bool | None:
     """
-    Erkennt am eingebrannten JPEG-Kommentar, ob dieses Bild von add_badge()
-    erzeugt wurde (siehe badge.BADGE_MARKER) - zuverlaessiger als sich auf
-    Plex/plexapi-Metadaten wie "provider" zu verlassen (die waren es nicht).
+    Detects from the burned-in JPEG comment whether this image was produced
+    by add_badge() (see badge.BADGE_MARKER) - more reliable than relying on
+    Plex/plexapi metadata like "provider" (which turned out not to be).
 
-    True = eindeutig unser Marker, False = eindeutig kein Marker (sauber),
-    None = nicht entscheidbar (z.B. abgebrochener/kaputter Download). Der
-    None-Fall darf NIE wie False behandelt werden, sonst kann ein Download-
-    Aussetzer bei einem eigenen, bereits bebadgten Poster dazu fuehren, dass
-    es faelschlich als "sauberes Original" durchgeht und erneut bebadgt wird.
+    True = definitely our marker, False = definitely no marker (clean),
+    None = undecidable (e.g. an aborted/broken download). The None case must
+    NEVER be treated like False, otherwise a download hiccup on an already-
+    badged poster of ours could make it falsely pass as a "clean original"
+    and get badged again.
     """
     if img_bytes is None:
         return None
@@ -215,16 +214,15 @@ def _poster_candidate_bytes(plex, p) -> bytes | None:
 
 def _is_upload_poster(p) -> bool:
     """
-    True, wenn dieser Plex-Poster-Kandidat ein manueller Upload ist (unserer
-    oder ein fremder/frueherer, auch aus der Zeit vor dem Badge-Marker) -
-    erkannt an Plex' eigenem Key-Schema ("upload://posters/..."). Alles
-    andere (direkte TMDb-/Fanart-/TheTVDB-/Amazon-/Gracenote-URLs, Plex'
-    interne Agenten-Referenz "metadata://posters/...") ist ein
-    Agenten-/Original-Poster.
+    True if this Plex poster candidate is a manual upload (ours or someone
+    else's/from before, including from before the badge marker existed) -
+    detected via Plex's own key scheme ("upload://posters/..."). Anything
+    else (direct TMDb/Fanart/TheTVDB/Amazon/Gracenote URLs, Plex's internal
+    agent reference "metadata://posters/...") is an agent/original poster.
 
-    Zuverlässiger als der Badge-Marker allein: der Marker erkennt nur Poster,
-    die WIR seit seiner Einfuehrung selbst erzeugt haben, nicht Uploads von
-    davor. Das Key-Schema ist dagegen unabhaengig vom Alter des Uploads.
+    More reliable than the badge marker alone: the marker only recognizes
+    posters WE generated ourselves since it was introduced, not uploads from
+    before that. The key scheme, by contrast, is independent of the upload's age.
     """
     key = getattr(p, "key", "") or ""
     return "upload://posters" in key or "upload%3A%2F%2Fposters" in key
@@ -232,22 +230,22 @@ def _is_upload_poster(p) -> bool:
 
 def fetch_original_poster_bytes(plex, item) -> tuple[bytes, bool]:
     """
-    Liefert das unbebadgte Original-Poster. Liest primaer aus dem lokalen
-    Cache (ORIGINALS_DIR) - dort landet nur, was zuvor eindeutig als
-    Agenten-Original verifiziert wurde, das Vertrauen ist also gerechtfertigt
-    und ein erneuter Live-Check bei Plex nicht noetig.
+    Returns the unbadged original poster. Reads primarily from the local
+    cache (ORIGINALS_DIR) - only things previously and unambiguously verified
+    as an agent original land there, so the trust is justified and a fresh
+    live check against Plex isn't needed.
 
-    Nur wenn fuer diesen Titel noch nichts gecacht ist (z.B. neu in Plex),
-    wird live bei Plex nachgeschaut: alle Poster-Kandidaten durchgehen,
-    Uploads (siehe _is_upload_poster) grundsaetzlich ignorieren - auch
-    unmarkierte aus der Zeit vor dem Badge-Marker, die sich sonst faelschlich
-    als "Original" haetten durchschmuggeln koennen - und den ersten
-    verbleibenden (Agenten-)Kandidaten nehmen. Der Badge-Marker dient hier nur
-    noch als zusaetzliche Sicherheitspruefung auf den gewaehlten Kandidaten.
+    Only if nothing is cached yet for this title (e.g. new in Plex) does it
+    check live against Plex: go through all poster candidates, always ignore
+    uploads (see _is_upload_poster) - including unmarked ones from before the
+    badge marker existed, which could otherwise have falsely smuggled
+    themselves through as an "original" - and take the first remaining
+    (agent) candidate. The badge marker here only serves as an extra safety
+    check on the chosen candidate.
 
-    Findet sich gar kein verwertbarer Kandidat, wird als letzter Ausweg das
-    aktuell ausgewaehlte Poster verwendet (kann theoretisch schon bebadgt
-    sein). Gibt (bild_bytes, original_gefunden) zurueck.
+    If no usable candidate is found at all, the currently selected poster is
+    used as a last resort (may theoretically already be badged). Returns
+    (image_bytes, original_found).
     """
     cached = ORIGINALS_DIR / f"{item.ratingKey}.jpg"
     if cached.exists():
@@ -271,36 +269,36 @@ def fetch_original_poster_bytes(plex, item) -> tuple[bytes, bool]:
 
 def cleanup_old_uploaded_posters(plex, item) -> int:
     """
-    Loescht (best effort) aeltere, manuell hochgeladene Poster-Versionen
-    dieses Plex-Items (siehe _is_upload_poster) - alles ausser der aktuell
-    ausgewaehlten. Erfasst damit auch Uploads von vor der Einfuehrung des
-    Badge-Markers. Ein Loeschversuch auf einen Agenten-Poster (z.B. TMDb)
-    kommt dank der Key-Pruefung erst gar nicht vor.
+    Deletes (best effort) older, manually uploaded poster versions of this
+    Plex item (see _is_upload_poster) - everything except the currently
+    selected one. This also catches uploads from before the badge marker
+    existed. A deletion attempt on an agent poster (e.g. TMDb) can't happen
+    at all thanks to the key check.
 
-    Loggt jeden Kandidaten samt Entscheidung/Ergebnis nach stdout (sichtbar in
-    den Container-Logs).
+    Logs every candidate along with the decision/result to stdout (visible
+    in the container logs).
     """
     removed = 0
     try:
         candidates = list(item.posters())
     except Exception as e:
-        print(f"[cleanup] {item.title}: item.posters() fehlgeschlagen: {e}", flush=True)
+        print(f"[cleanup] {item.title}: item.posters() failed: {e}", flush=True)
         return 0
 
     for p in candidates:
         key = getattr(p, "key", "?")
         if getattr(p, "selected", False):
-            print(f"[cleanup] {item.title}: uebersprungen (aktuell ausgewaehlt) - {key}", flush=True)
+            print(f"[cleanup] {item.title}: skipped (currently selected) - {key}", flush=True)
             continue
         if not _is_upload_poster(p):
-            print(f"[cleanup] {item.title}: uebersprungen (Agenten-Poster) - {key}", flush=True)
+            print(f"[cleanup] {item.title}: skipped (agent poster) - {key}", flush=True)
             continue
         try:
             p.delete()
             removed += 1
-            print(f"[cleanup] {item.title}: geloescht - {key}", flush=True)
+            print(f"[cleanup] {item.title}: deleted - {key}", flush=True)
         except Exception as e:
-            print(f"[cleanup] {item.title}: Loeschen fehlgeschlagen ({e}) - {key}", flush=True)
+            print(f"[cleanup] {item.title}: delete failed ({e}) - {key}", flush=True)
     return removed
 
 
@@ -322,16 +320,15 @@ def _record_state(path: Path, rating_key, score) -> None:
 
 def render_branded_image(item, entry: dict, force: bool = False) -> Path:
     """
-    Brennt den Score aus 'entry' auf das lokal gecachte Original-Poster von
-    'item' (siehe ORIGINALS_DIR) und speichert das Ergebnis unter
-    BRANDED_DIR/<ratingKey>.jpg - reine lokale Datei-Operation, kein
-    Plex-Kontakt. Wer nachsehen will, ob ein Badge richtig aussieht, kann
-    diese Datei direkt im Docker-Volume oeffnen, bevor irgendwas bei Plex
-    landet.
+    Burns the score from 'entry' onto the locally cached original poster of
+    'item' (see ORIGINALS_DIR) and saves the result under
+    BRANDED_DIR/<ratingKey>.jpg - a pure local file operation, no Plex
+    contact. Anyone who wants to check whether a badge looks right can open
+    this file directly in the Docker volume before anything reaches Plex.
 
-    Ueberspringt das Rendern, wenn schon mit demselben Score gerendert wurde
-    (RENDERED_STATE_FILE), ausser force=True. Braucht ein bereits gecachtes
-    Original (siehe fetch_original_poster_bytes) - wirft sonst FileNotFoundError.
+    Skips rendering if already rendered with the same score
+    (RENDERED_STATE_FILE), unless force=True. Needs an already-cached
+    original (see fetch_original_poster_bytes) - otherwise raises FileNotFoundError.
     """
     rk = str(item.ratingKey)
     branded_path = BRANDED_DIR / f"{rk}.jpg"
@@ -357,11 +354,10 @@ def render_branded_image(item, entry: dict, force: bool = False) -> Path:
 
 def push_to_plex(plex, item, entry: dict, force: bool = False) -> str:
     """
-    Laedt das lokal gebrannte Poster (siehe render_branded_image, wird bei
-    Bedarf automatisch nachgerendert) zu Plex hoch und raeumt danach (falls
-    aktiviert) alte eigene Uploads auf. Merkt sich den hochgeladenen Score
-    (PUSHED_STATE_FILE). Von "Auf Plex uebertragen" und vom Autopilot
-    gemeinsam genutzt.
+    Uploads the locally branded poster (see render_branded_image, rendered
+    on demand if needed) to Plex and afterwards (if enabled) cleans up old
+    self-uploads. Tracks the uploaded score (PUSHED_STATE_FILE). Shared by
+    "Push to Plex" and the autopilot.
     """
     branded_path = render_branded_image(item, entry, force=force)
     item.uploadPoster(filepath=str(branded_path))
@@ -372,8 +368,8 @@ def push_to_plex(plex, item, entry: dict, force: bool = False) -> str:
 
 
 def _current_library_items(plex) -> dict:
-    """Liefert {ratingKey: (plex_item, cache_prefix)} fuer alle konfigurierten
-    Bibliotheken - Grundlage fuer den Plex-Abgleich im Autopilot."""
+    """Returns {ratingKey: (plex_item, cache_prefix)} for all configured
+    libraries - the basis for the Plex comparison in the autopilot."""
     items = {}
     for section_name in LIBRARY_SECTIONS:
         try:
@@ -395,8 +391,8 @@ def _emit(log, msg, prefix="sync"):
 
 
 def score_sync(log=None) -> None:
-    """Stufe 1: inkrementeller Score-Sync bei isitwokeornot.com. Eigenstaendig
-    per Button "Score-Datenbank aktualisieren" oder Teil des Autopiloten."""
+    """Stage 1: incremental score sync against isitwokeornot.com. Triggered
+    standalone via the "Update Score Database" button or as part of the autopilot."""
     wait = _reserve_rebuild_slot()
     if wait:
         _emit(log, t("score_sync.cooldown", seconds=int(wait)))
@@ -415,17 +411,16 @@ def score_sync(log=None) -> None:
 
 def sync_library(log=None) -> list[str]:
     """
-    Stufe 2 - Plex-Abgleich, ohne irgendetwas zu Plex hochzuladen:
-      - fehlende Original-Poster fuer Titel mit Score nachladen (ORIGINALS_DIR)
-      - daraus die gebrandete Version rendern, sofern noch nicht mit dem
-        aktuellen Score geschehen (BRANDED_DIR, siehe render_branded_image)
-      - lokale Original-/Branded-Dateien fuer Titel loeschen, die nicht mehr
-        in der (hier ohnehin abgefragten) Plex-Bibliothek stehen ("Leichen")
+    Stage 2 - Plex comparison, without uploading anything to Plex:
+      - fetch missing original posters for titles with a known score (ORIGINALS_DIR)
+      - render the branded version from them, unless already done with the
+        current score (BRANDED_DIR, see render_branded_image)
+      - delete local original/branded files for titles no longer in the
+        (already fetched here anyway) Plex library ("orphans")
 
-    Gibt die Titel zurueck, fuer die kein TMDb-Original gefunden wurde (siehe
-    "missing_originals" in api_sync_library) - unabhaengig von der Sprache
-    ausgewertet, damit das Frontend-Popup nicht auf uebersetzten Log-Text
-    angewiesen ist.
+    Returns the titles for which no TMDb original was found (see
+    "missing_originals" in api_sync_library) - evaluated independent of
+    language, so the frontend popup isn't reliant on translated log text.
     """
     if demo_mode():
         _emit(log, t("sync.demo_mode"))
@@ -443,7 +438,7 @@ def sync_library(log=None) -> list[str]:
         if entry:
             titled_entries.append((rk, item, entry))
 
-    # Original-Poster nachladen, wo noch keins gecacht ist
+    # Fetch original posters where none is cached yet
     to_warm = [(item, entry) for rk, item, entry in titled_entries if not (ORIGINALS_DIR / f"{rk}.jpg").exists()]
     warnings = []
     if to_warm:
@@ -461,7 +456,7 @@ def sync_library(log=None) -> list[str]:
     if warnings:
         _emit(log, t("sync.missing_originals_warning", titles=", ".join(warnings)))
 
-    # Gebrandete Version fuer neue/geaenderte Titel rendern
+    # Render the branded version for new/changed titles
     rendered_state = _load_state_file(RENDERED_STATE_FILE)
     to_render = [
         (item, entry) for rk, item, entry in titled_entries
@@ -477,7 +472,7 @@ def sync_library(log=None) -> list[str]:
     if rendered:
         _emit(log, t("sync.rendered_count", count=rendered))
 
-    # Leichen entfernen (Titel nicht mehr in Plex) - in beiden lokalen Ordnern
+    # Remove orphans (titles no longer in Plex) - in both local folders
     removed = 0
     for folder in (ORIGINALS_DIR, BRANDED_DIR):
         for f in folder.glob("*.jpg"):
@@ -498,15 +493,14 @@ def sync_library(log=None) -> list[str]:
 
 def push_pending_to_plex(log=None, progress=None, force: bool = False, rating_keys=None) -> None:
     """
-    Stufe 3 - laedt Poster zu Plex hoch. Ohne rating_keys: die ganze
-    Bibliothek, aber standardmaessig (force=False) nur Titel, die neu sind
-    oder deren Score sich seit dem letzten Push geaendert hat
-    (PUSHED_STATE_FILE) - so macht der Autopilot bei unveraendertem Zustand
-    nichts. Mit rating_keys: nur diese Titel; force=True (z.B. Klick auf
-    "Auf Plex uebertragen") laedt sie in jedem Fall neu hoch, unabhaengig vom
-    zuletzt gepushten Score - z.B. um nach einer geaenderten Badge-Einstellung
-    alles neu zu erzwingen. progress(done, total) ist ein optionaler Callback
-    fuer eine Fortschrittsanzeige in der UI.
+    Stage 3 - uploads posters to Plex. Without rating_keys: the whole
+    library, but by default (force=False) only titles that are new or whose
+    score has changed since the last push (PUSHED_STATE_FILE) - so the
+    autopilot does nothing when the state is unchanged. With rating_keys:
+    only these titles; force=True (e.g. clicking "Push to Plex") uploads
+    them again regardless, independent of the last pushed score - e.g. to
+    force everything to re-upload after changing a badge setting.
+    progress(done, total) is an optional callback for a progress indicator in the UI.
     """
     if demo_mode():
         _emit(log, t("push.demo_mode"))
@@ -559,8 +553,8 @@ def push_pending_to_plex(log=None, progress=None, force: bool = False, rating_ke
 
 
 def autonomous_sync(log=None, progress=None) -> None:
-    """Autopilot: alle drei Stufen hintereinander (Score-Sync, Plex-Abgleich
-    inkl. Rendern, Push). Fuer manuelles Eingreifen einzeln nutzbar: siehe
+    """Autopilot: all three stages in sequence (score sync, Plex comparison
+    incl. rendering, push). Usable individually for manual intervention: see
     score_sync/sync_library/push_pending_to_plex."""
     def _progress(step):
         if progress:
@@ -576,9 +570,9 @@ def autonomous_sync(log=None, progress=None) -> None:
 
 def _reserve_rebuild_slot() -> float:
     """
-    Reserviert einen Cache-Rebuild-Lauf, falls der Cooldown seit dem letzten Lauf
-    abgelaufen ist. Gibt 0 zurueck (und reserviert), wenn ein Lauf starten darf,
-    sonst die verbleibende Wartezeit in Sekunden.
+    Reserves a cache-rebuild run if the cooldown since the last run has
+    elapsed. Returns 0 (and reserves) if a run may start, otherwise the
+    remaining wait time in seconds.
     """
     global _last_rebuild_started
     with _rebuild_lock:
@@ -596,7 +590,7 @@ def _auto_sync_loop():
         try:
             autonomous_sync()
         except Exception as e:
-            print(f"[auto-sync] Unerwarteter Fehler: {e}", flush=True)
+            print(f"[auto-sync] Unexpected error: {e}", flush=True)
 
 
 if AUTO_SYNC_INTERVAL_MINUTES > 0:
@@ -656,15 +650,15 @@ def api_library():
 @app.route("/api/poster/<rating_key>")
 def api_poster(rating_key):
     """
-    Poster fuer die Grid-Ansicht. Kommt aus dem lokalen Original-Cache
-    (ORIGINALS_DIR) - Wokearr zeigt also immer das eigene, saubere Original
-    (der Score kommt als reines CSS-Overlay obendrauf, siehe app.js), egal
-    was gerade tatsaechlich als Poster in Plex ausgewaehlt ist. Faellt nur
-    zurueck auf Plex' aktuelles Poster, falls fuer diesen Titel noch kein
-    Original gecacht ist (z.B. vor dem ersten "Jetzt synchronisieren").
+    Poster for the grid view. Comes from the local original cache
+    (ORIGINALS_DIR) - so Wokearr always shows its own, clean original (the
+    score is a pure CSS overlay on top, see app.js), regardless of what's
+    actually selected as the poster in Plex right now. Only falls back to
+    Plex's current poster if no original is cached yet for this title (e.g.
+    before the first "Sync Now").
 
-    Explizit nicht cachebar (Cache-Control: no-store), da sich die Datei durch
-    Sync/Autopilot jederzeit aendern kann, die URL selbst aber gleich bleibt.
+    Explicitly not cacheable (Cache-Control: no-store), since the file can
+    change at any time via sync/autopilot while the URL itself stays the same.
     """
     demo = next((d for d in DEMO_ITEMS if d["ratingKey"] == rating_key), None)
     if demo:
@@ -724,9 +718,9 @@ def api_rebuild_cache():
 
 @app.route("/api/sync-library", methods=["POST"])
 def api_sync_library():
-    """Stufe 2 manuell: Plex-Abgleich - Original-Poster nachladen, gebrandete
-    Version rendern, entfernte Titel aufraeumen. Kein Push zu Plex (siehe
-    /api/apply dafuer)."""
+    """Stage 2, manual: Plex comparison - fetch original posters, render
+    branded versions, clean up removed titles. No push to Plex (see
+    /api/apply for that)."""
     if demo_mode():
         return jsonify({"error": t("api.sync_library.demo_error")}), 400
 
@@ -748,10 +742,10 @@ def api_sync_library():
 
 @app.route("/api/apply", methods=["POST"])
 def api_apply():
-    """Stufe 3 manuell ("Auf Plex uebertragen"): laedt die gebrandeten Poster
-    der angegebenen Titel zu Plex hoch - erzwungen (force=True), unabhaengig
-    davon, ob der Score sich seit dem letzten Push geaendert hat. Rendert bei
-    Bedarf automatisch nach (siehe push_to_plex)."""
+    """Stage 3, manual ("Push to Plex"): uploads the branded posters of the
+    given titles to Plex - forced (force=True), regardless of whether the
+    score has changed since the last push. Renders on demand automatically
+    if needed (see push_to_plex)."""
     if demo_mode():
         return jsonify({"error": t("api.apply.demo_error")}), 400
 
@@ -779,9 +773,9 @@ def api_apply():
 
 @app.route("/api/cleanup-posters", methods=["POST"])
 def api_cleanup_posters():
-    """Geht einmalig die ganze Bibliothek durch und entfernt alte, selbst
-    hochgeladene Poster-Versionen aus Plex (siehe cleanup_old_uploaded_posters).
-    Unabhaengig von CLEANUP_OLD_POSTERS immer verfuegbar, da explizit ausgeloest."""
+    """Goes through the whole library once and removes old, self-uploaded
+    poster versions from Plex (see cleanup_old_uploaded_posters). Always
+    available regardless of CLEANUP_OLD_POSTERS, since it's explicitly triggered."""
     if demo_mode():
         return jsonify({"error": t("api.cleanup.demo_error")}), 400
 
@@ -836,6 +830,6 @@ def api_job(job_id):
 
 
 if __name__ == "__main__":
-    # Nur fuer lokale Entwicklung ausserhalb von Docker - im Container laeuft gunicorn (siehe Dockerfile)
-    print("Demo-Modus:", demo_mode())
+    # Only for local development outside of Docker - gunicorn runs in the container (see Dockerfile)
+    print("Demo mode:", demo_mode())
     app.run(host="0.0.0.0", port=5005, debug=True)

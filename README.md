@@ -195,7 +195,11 @@ zusätzliche Konfiguration nötig, GitHub Actions nutzt den eingebauten
   dem strukturierten `schema.org/Review`-Datenblock jeder Titel-Seite
   gelesen. `robots.txt` der Seite sperrt nur `/api/` und `/admin` – normale
   Seitenaufrufe sind erlaubt, trotzdem bitte fair bleiben (Standard-Delay im
-  Cache-Skript nicht auf 0 setzen).
+  Cache-Skript nicht auf 0 setzen). Normale (nicht-vollständige) Score-Syncs
+  fragen dank `<lastmod>` aus der Sitemap nur neue/geänderte Reviews erneut ab
+  – auf Wunsch des Betreibers, um wiederholte Läufe schlank zu halten. Links
+  zu den Review-Seiten in der UI tragen UTM-Parameter (`utm_source=wokearr`),
+  damit isitwokeornot.com sehen kann, wie viel Traffic Wokearr ihnen zuführt.
 - Dieses Projekt ist ein privates Hobby-Tool ohne Zusammenhang mit
   isitwokeornot.com, Plex Inc. oder TMDb.
 - Hochgeladene Poster bleiben in Plex i. d. R. als "ausgewählt" erhalten,

@@ -2,11 +2,11 @@ version: "3.8"
 
 services:
   woke-score:
-    # Fertiges Image aus der GitHub Action (.github/workflows/docker-publish.yml).
-    # Fuer eine feste Version statt "latest" z.B. ":v0.1.0" verwenden.
+    # Ready-built image from the GitHub Action (.github/workflows/docker-publish.yml).
+    # Use a pinned version instead of "latest", e.g. ":v0.1.0".
     image: ghcr.io/jake-double-one/wokearr:latest
-    # Alternative: selbst aus diesem Repo bauen (z.B. fuer eigene Anpassungen) -
-    # dann die "image:"-Zeile oben entfernen/auskommentieren und stattdessen:
+    # Alternative: build from this repo yourself (e.g. for your own changes) -
+    # remove/comment out the "image:" line above and use this instead:
     # build:
     #   context: .
     #   dockerfile: Dockerfile

@@ -1,6 +1,6 @@
 """
-Zeichnet eine Ampel-Badge (Kreis mit Prozentzahl) auf ein Poster.
-Rot = hoher Woke-Score (Warnung), Gelb = mittel, Gruen = niedrig.
+Draws a traffic-light badge (circle with percentage) onto a poster.
+Red = high woke score (warning), yellow = medium, green = low.
 """
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
@@ -10,10 +10,10 @@ FONT_CANDIDATES = [
     "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",            # Alpine (font-dejavu)
 ]
 
-# Schwellenwerte (score in Prozent, 0-100)
-THRESH_GREEN_MAX = 33   # 0-33  -> gruen
-THRESH_YELLOW_MAX = 66  # 34-66 -> gelb
-                        # 67-100 -> rot
+# Thresholds (score in percent, 0-100)
+THRESH_GREEN_MAX = 33   # 0-33  -> green
+THRESH_YELLOW_MAX = 66  # 34-66 -> yellow
+                        # 67-100 -> red
 
 COLOR_GREEN  = (46, 160, 67)
 COLOR_YELLOW = (240, 173, 13)
@@ -21,10 +21,10 @@ COLOR_RED    = (215, 45, 32)
 COLOR_WHITE  = (255, 255, 255)
 COLOR_SHADOW = (0, 0, 0, 140)
 
-# In jedes von uns erzeugte Poster gebrannter Marker (JPEG-Kommentar-Segment) -
-# damit app.py zuverlaessig erkennen kann "das ist ein eigener Badge-Upload",
-# unabhaengig davon, was Plex/plexapi als Poster-"provider" meldet (das hat
-# sich als nicht zuverlaessig erwiesen).
+# Marker burned into every poster we generate (JPEG comment segment) - so
+# app.py can reliably recognize "this is one of our own badge uploads",
+# independent of whatever Plex/plexapi reports as the poster "provider"
+# (that turned out not to be reliable).
 BADGE_MARKER = b"wokearr-badge"
 
 
@@ -40,11 +40,11 @@ def _load_font(size: int):
     for candidate in FONT_CANDIDATES:
         if Path(candidate).exists():
             return ImageFont.truetype(candidate, size)
-    # Fallback, falls im Container-Image keine DejaVu-Fonts installiert sind
+    # Fallback in case no DejaVu fonts are installed in the container image
     try:
         return ImageFont.load_default(size=size)
     except TypeError:
-        # aeltere Pillow-Versionen kennen den size-Parameter bei load_default() nicht
+        # older Pillow versions don't know the size parameter on load_default()
         return ImageFont.load_default()
 
 
@@ -74,10 +74,10 @@ def add_badge(
     label_style: str = "percent",
     width_percent: float = 20.0,
 ):
-    """width_percent steuert die Groesse der Badge relativ zur Posterbreite
-    (z.B. 20.0 = 20%). Bezieht sich beim Kreis-Stil ("percent") direkt auf den
-    Durchmesser; beim Pillen-Stil ("woke") proportional auf die Schriftgroesse,
-    so skalieren beide Varianten konsistent mit demselben Regler."""
+    """width_percent controls the badge's size relative to the poster width
+    (e.g. 20.0 = 20%). For the circle style ("percent") it applies directly
+    to the diameter; for the pill style ("woke") proportionally to the font
+    size, so both variants scale consistently with the same knob."""
     img = Image.open(poster_path).convert("RGBA")
     w, h = img.size
     margin = int(w * 0.035)
@@ -88,9 +88,9 @@ def add_badge(
     draw = ImageDraw.Draw(overlay)
 
     if label_style == "woke":
-        # "X% woke" ist deutlich breiter als nur "X%" - passt nicht in einen
-        # festen Kreis (wuerde ueberlaufen). Stattdessen eine sich an den Text
-        # anpassende Pille, wie sie auch die Web-UI fuer den Badge-Chip nutzt.
+        # "X% woke" is noticeably wider than just "X%" - doesn't fit in a
+        # fixed circle (would overflow). Use a pill that adapts to the text
+        # instead, the same as the web UI uses for the badge chip.
         text = f"{score}% woke"
         font = _load_font(int(w * size_fraction * 0.25))
         bbox = draw.textbbox((0, 0), text, font=font)
@@ -113,7 +113,7 @@ def add_badge(
         ty = y0 + (badge_h - th) / 2 - bbox[1]
         draw.text((tx, ty), text, font=font, fill=COLOR_WHITE)
     else:
-        # Kreis-Badge mit zentrierter Prozentzahl
+        # Circle badge with centered percentage
         diameter = int(w * size_fraction)
         x0, y0, x1, y1 = _badge_box(w, h, margin, diameter, diameter, position)
 

@@ -1,0 +1,70 @@
+{
+  "topbar.demo_flag": "Tryb demo – Plex nieskonfigurowany",
+  "topbar.btn_rebuild.label": "Aktualizuj bazę wyników",
+  "topbar.btn_rebuild.title": "Etap 1: odśwież wyniki z isitwokeornot.com (przyrostowo)",
+  "topbar.btn_sync_library.label": "Synchronizuj teraz",
+  "topbar.btn_sync_library.title": "Etap 2: porównaj z Plex, pobierz oryginalne plakaty i wyrenderuj odznakę lokalnie (bez przesyłania)",
+  "topbar.btn_apply_all.label": "Wyślij do Plex",
+  "topbar.btn_apply_all.title": "Etap 3: prześlij wyrenderowane plakaty do Plex",
+  "topbar.btn_rebuild_full.label": "Pełna przebudowa",
+  "topbar.btn_rebuild_full.title": "Pobiera ponownie każdy tytuł (zajmuje zauważalnie więcej czasu)",
+  "topbar.btn_cleanup_posters.label": "Usuń stare plakaty w Plex",
+  "topbar.btn_cleanup_posters.title": "Usuwa stare, samodzielnie przesłane wersje plakatów w Plex (historia plakatów), które gromadzą się z czasem",
+
+  "filter.all": "Wszystkie",
+  "filter.red": "Czerwone",
+  "filter.yellow": "Żółte",
+  "filter.green": "Zielone",
+
+  "empty_state": "Nie znaleziono tytułów z wynikiem woke. Kliknij \"Synchronizuj teraz\" lub sprawdź PLEX_URL/PLEX_TOKEN.",
+
+  "footer.source_prefix": "Dane wyników z",
+  "footer.disclaimer": "nieoficjalne narzędzie isitwokeornot.com, Plex Inc. ani TMDb",
+
+  "card.push": "Wyślij",
+  "card.push_done": "Gotowe",
+  "card.loading": "...",
+  "card.source_title": "Źródło: isitwokeornot.com",
+
+  "toast.uploading_posters": "Przesyłanie plakatów",
+  "toast.building_cache": "Budowanie pamięci podręcznej",
+  "toast.syncing_with_plex": "Synchronizacja z Plex",
+  "toast.cleaning_posters": "Czyszczenie plakatów w Plex",
+  "toast.suffix_done": "gotowe",
+  "toast.suffix_error": "błąd",
+
+  "confirm.full_rebuild": "Rozpocząć pełną przebudowę? Spowoduje to ponowne pobranie każdego tytułu i zajmie zauważalnie więcej czasu niż zwykła aktualizacja.",
+  "confirm.cleanup_posters": "Usunąć stare, samodzielnie przesłane wersje plakatów w całej bibliotece Plex?\n\nAktualnie wybrane plakaty pozostaną nietknięte - usunięte zostaną tylko nieużywane starsze wersje. Oryginalne plakaty z TMDb i innych źródeł nie zostaną naruszone.",
+
+  "alert.missing_originals": "Uwaga: nie znaleziono oryginalnego plakatu TMDb w Plex dla: {titles} - jako podstawę użyto aktualnego plakatu (możliwa podwójna odznaka). Rozwiązanie: uruchom 'Odśwież metadane' w Plex, a następnie zsynchronizuj ponownie.",
+
+  "score_sync.cooldown": "Synchronizacja wyników pominięta (odliczanie, pozostało {seconds}s).",
+  "score_sync.done": "Synchronizacja wyników: {processed} nowych tytułów, {total} łącznie w pamięci podręcznej.",
+
+  "sync.demo_mode": "Tryb demo: nie skonfigurowano Plex.",
+  "sync.poster_fetch_error": "Błąd podczas pobierania oryginalnego plakatu ({title}): {error}",
+  "sync.posters_fetched": "Oryginalne plakaty: {count} nowo pobranych.",
+  "sync.missing_originals_warning": "Uwaga: nie znaleziono oryginalnego plakatu TMDb w Plex dla: {titles} - jako podstawę użyto aktualnego plakatu (możliwa podwójna odznaka). Rozwiązanie: uruchom 'Odśwież metadane' w Plex, a następnie zsynchronizuj ponownie.",
+  "sync.render_error": "Błąd podczas renderowania ({title}): {error}",
+  "sync.rendered_count": "Wyrenderowano plakaty z odznaką: {count}.",
+  "sync.orphans_removed": "Usunięto osierocone pliki: {count} dla tytułów, których już nie ma.",
+  "sync.nothing_new": "Zsynchronizowano: brak nowości.",
+
+  "push.demo_mode": "Tryb demo: brak Plex do wysyłania.",
+  "push.nothing_to_push": "Nic do wysłania.",
+  "push.error": "Błąd podczas wysyłania ({title}): {error}",
+  "push.ok": "OK: {title}",
+
+  "render.missing_original": "Brak oryginalnego plakatu dla '{title}' w pamięci podręcznej - najpierw zsynchronizuj.",
+
+  "rebuild_cache.cooldown_error": "Poczekaj chwilę: kolejne pobranie mapy witryny będzie możliwe za {seconds}s (odliczanie chroni isitwokeornot.com przed zbyt częstymi zapytaniami).",
+  "rebuild_cache.loading": "Wczytywanie mapy witryny...",
+  "rebuild_cache.done": "Gotowe: przetworzono {processed} tytułów, {total} łącznie w pamięci podręcznej.",
+
+  "api.sync_library.demo_error": "Tryb demo: brak biblioteki Plex do synchronizacji.",
+  "api.apply.demo_error": "Tryb demo: ustaw PLEX_URL/PLEX_TOKEN jako zmienne środowiskowe, aby faktycznie wysyłać.",
+  "api.cleanup.demo_error": "Tryb demo: brak biblioteki Plex do wyczyszczenia.",
+
+  "cleanup.item_error": "Błąd dla {title}: {error}",
+  "cleanup.done": "Gotowe: usunięto {count} starych wersji plakatów w Plex."
+}

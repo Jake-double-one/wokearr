@@ -1,6 +1,14 @@
 let ITEMS = [];
 let CURRENT_FILTER = "all";
 
+function t(key, vars) {
+  let template = (window.__I18N__ && window.__I18N__[key]) || key;
+  if (vars) {
+    for (const k in vars) template = template.split(`{${k}}`).join(vars[k]);
+  }
+  return template;
+}
+
 function scoreBand(score) {
   if (score <= 33) return "green";
   if (score <= 66) return "yellow";
@@ -31,8 +39,8 @@ function render() {
         <div class="card-title">${item.title}</div>
         <div class="card-year">${item.year || ""}</div>
         <div class="card-actions">
-          <button class="card-apply" data-key="${item.ratingKey}">Übertragen</button>
-          <a class="source-link" href="${sourceUrl}" target="_blank" rel="noopener noreferrer" title="Quelle: isitwokeornot.com">
+          <button class="card-apply" data-key="${item.ratingKey}">${t("card.push")}</button>
+          <a class="source-link" href="${sourceUrl}" target="_blank" rel="noopener noreferrer" title="${t("card.source_title")}">
             <img class="source-icon" src="https://isitwokeornot.com/favicon.ico" alt="isitwokeornot.com">
           </a>
         </div>
@@ -75,7 +83,7 @@ async function pollJob(jobId, labelPrefix) {
     const pct = total ? Math.round((done / total) * 100) : 0;
     showToast(`${labelPrefix}: ${done}/${total}`, pct);
     if (job.state === "done" || job.state === "error") {
-      showToast(job.state === "done" ? `${labelPrefix}: fertig` : `${labelPrefix}: Fehler`, 100);
+      showToast(job.state === "done" ? `${labelPrefix}: ${t("toast.suffix_done")}` : `${labelPrefix}: ${t("toast.suffix_error")}`, 100);
       setTimeout(hideToast, 3000);
       return job;
     }
@@ -92,7 +100,7 @@ async function loadLibrary() {
 }
 
 async function applyBadges(ratingKeys, btn) {
-  if (btn) { btn.disabled = true; btn.textContent = "..."; }
+  if (btn) { btn.disabled = true; btn.textContent = t("card.loading"); }
   const res = await fetch("/api/apply", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -102,17 +110,17 @@ async function applyBadges(ratingKeys, btn) {
   if (data.error) {
     showToast(data.error);
     setTimeout(hideToast, 4000);
-    if (btn) { btn.disabled = false; btn.textContent = "Übertragen"; }
+    if (btn) { btn.disabled = false; btn.textContent = t("card.push"); }
     return;
   }
-  const job = await pollJob(data.job_id, "Poster werden übertragen");
-  if (btn) { btn.textContent = "Erledigt"; }
+  const job = await pollJob(data.job_id, t("toast.uploading_posters"));
+  if (btn) { btn.textContent = t("card.push_done"); }
 }
 
 function warnAboutMissingOriginals(job) {
-  const line = (job.log || []).find(l => l.startsWith("Warnung: kein TMDb-Original"));
-  if (!line) return;
-  alert(line);
+  const titles = job.missing_originals;
+  if (!titles || !titles.length) return;
+  alert(t("alert.missing_originals", { titles: titles.join(", ") }));
 }
 
 async function triggerRebuild(full) {
@@ -127,7 +135,7 @@ async function triggerRebuild(full) {
     setTimeout(hideToast, 5000);
     return;
   }
-  await pollJob(data.job_id, full ? "Kompletter Neuaufbau" : "Cache wird aufgebaut");
+  await pollJob(data.job_id, full ? t("topbar.btn_rebuild_full.label") : t("toast.building_cache"));
   loadLibrary();
 }
 
@@ -142,7 +150,7 @@ document.getElementById("btn-sync-library").addEventListener("click", async (e) 
     btn.disabled = false;
     return;
   }
-  const job = await pollJob(data.job_id, "Synchronisiere mit Plex");
+  const job = await pollJob(data.job_id, t("toast.syncing_with_plex"));
   btn.disabled = false;
   warnAboutMissingOriginals(job);
   loadLibrary();
@@ -151,7 +159,7 @@ document.getElementById("btn-sync-library").addEventListener("click", async (e) 
 document.getElementById("btn-rebuild").addEventListener("click", () => triggerRebuild(false));
 
 document.getElementById("btn-rebuild-full").addEventListener("click", () => {
-  if (confirm("Kompletten Neuaufbau starten? Das fragt alle Titel erneut ab und dauert deutlich länger als ein normales Update.")) {
+  if (confirm(t("confirm.full_rebuild"))) {
     triggerRebuild(true);
   }
 });
@@ -161,11 +169,7 @@ document.getElementById("btn-apply-all").addEventListener("click", () => {
 });
 
 document.getElementById("btn-cleanup-posters").addEventListener("click", async () => {
-  const ok = confirm(
-    "Alte, selbst hochgeladene Poster-Versionen in der gesamten Plex-Bibliothek löschen?\n\n" +
-    "Die aktuell ausgewählten Poster bleiben unangetastet, nur ungenutzte ältere " +
-    "Versionen werden entfernt. Original-Poster von TMDb & Co. werden nicht angerührt."
-  );
+  const ok = confirm(t("confirm.cleanup_posters"));
   if (!ok) return;
   const res = await fetch("/api/cleanup-posters", { method: "POST" });
   const data = await res.json();
@@ -174,7 +178,7 @@ document.getElementById("btn-cleanup-posters").addEventListener("click", async (
     setTimeout(hideToast, 5000);
     return;
   }
-  await pollJob(data.job_id, "Plex-Poster werden aufgeräumt");
+  await pollJob(data.job_id, t("toast.cleaning_posters"));
 });
 
 document.querySelectorAll(".chip").forEach(chip => {

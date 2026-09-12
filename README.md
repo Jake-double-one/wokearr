@@ -1,204 +1,200 @@
 # Wokearr
 
-Kleine, lokal gehostete Web-UI im Radarr/Sonarr-Look, die Filme und Serien in
-eurer Plex-Bibliothek mit einer Ampel-Badge (rot/gelb/grün) versieht, basierend
-auf dem Score von [isitwokeornot.com](https://isitwokeornot.com/).
+[Deutsche Version](README.de.md)
 
-- **Rot** = hoher Score (Warnung), **Gelb** = mittel, **Grün** = niedrig
-- Matching läuft über die TMDb-ID, die sowohl Plex als auch isitwokeornot.com
-  pro Titel führen
-- Original-Poster bleibt Basis, die Badge wird nur oben drauf gerendert und als
-  neues Poster in Plex hochgeladen - Rendern und Hochladen sind zwei getrennte
-  Schritte mit je einer eigenen lokalen Datei (`originals/`, `branded/`), so
-  lässt sich das gebrannte Ergebnis vor dem Push in Plex ansehen
-- **Autopilot:** einmal `AUTO_SYNC_INTERVAL_MINUTES` gesetzt, läuft alles von
-  selbst - neue Titel bekommen automatisch ihren Score, ihr Original-Poster,
-  ihren gerenderten Badge und werden nach Plex hochgeladen, entfernte Titel
-  werden aufgeräumt (siehe [Autopilot](#autopilot---automatischer-betrieb))
+Small, self-hosted web UI in a Radarr/Sonarr look that badges movies and shows
+in your Plex library with a traffic-light indicator (red/yellow/green), based
+on the score from [isitwokeornot.com](https://isitwokeornot.com/).
+
+- **Red** = high score (warning), **Yellow** = medium, **Green** = low
+- Matching runs on the TMDb ID that both Plex and isitwokeornot.com keep per
+  title
+- The original poster stays the base; the badge is only rendered on top and
+  uploaded to Plex as a new poster - rendering and uploading are two separate
+  steps, each with its own local file (`originals/`, `branded/`), so you can
+  check the burned-in result before it's pushed to Plex
+- **Autopilot:** once `AUTO_SYNC_INTERVAL_MINUTES` is set, everything runs on
+  its own - new titles automatically get their score, their original poster,
+  their rendered badge, and get uploaded to Plex; removed titles get cleaned
+  up (see [Autopilot](#autopilot---automatic-operation))
 
 ## Screenshot
 
-Poster-Grid mit farbigen Score-Badges, Filterleiste (Alle/Rot/Gelb/Grün) und
-Buttons für Score-Sync, Plex-Abgleich und Übertragen der Badges.
+Poster grid with colored score badges, a filter bar (All/Red/Yellow/Green),
+and buttons for score sync, Plex comparison, and pushing the badges.
 
-## Schnellstart (Docker Compose)
+## Quickstart (Docker Compose)
 
 ```bash
 git clone https://github.com/Jake-double-one/wokearr.git
 cd wokearr
 cp .env.example .env
-# .env mit PLEX_URL / PLEX_TOKEN / LIBRARY_SECTIONS ausfuellen
+# fill in .env with PLEX_URL / PLEX_TOKEN / LIBRARY_SECTIONS
 docker compose up -d
 ```
 
-Das Compose-File zieht direkt das fertige Image von
-`ghcr.io/jake-double-one/wokearr` (siehe [Releases](https://github.com/Jake-double-one/wokearr/releases)) –
-kein lokaler Build nötig.
+The compose file pulls the ready-built image directly from
+`ghcr.io/jake-double-one/wokearr` (see [Releases](https://github.com/Jake-double-one/wokearr/releases)) -
+no local build needed.
 
-Danach `http://<server-ip>:5005` öffnen.
+Then open `http://<server-ip>:5005`.
 
-Ohne gültige `PLEX_URL`/`PLEX_TOKEN` startet die App automatisch im
-**Demo-Modus** mit drei Beispieltiteln, damit ihr das UI ohne Risiko
-ausprobieren könnt.
+Without a valid `PLEX_URL`/`PLEX_TOKEN`, the app automatically starts in
+**demo mode** with three example titles, so you can try the UI risk-free.
 
-## In Portainer als Stack deployen
+## Deploying as a stack in Portainer
 
 1. **Stacks -> Add stack**
-2. Als Quelle **Web editor** wählen und den Inhalt von `docker-compose.yaml`
-   1:1 einfügen – die Datei zieht direkt das fertige Image von
-   `ghcr.io/jake-double-one/wokearr`, kein Build nötig.
-   (Alternativ **Repository** als Quelle mit Compose-Pfad `docker-compose.yaml`,
-   dann baut Portainer stattdessen selbst aus dem Repo-Code – dazu wie im
-   Compose-File beschrieben `image:` durch `build:` ersetzen.)
-3. Unter **Environment variables** `PLEX_URL`, `PLEX_TOKEN`, `LIBRARY_SECTIONS`
-   setzen (die `.env`-Datei wird von Portainer nicht automatisch gelesen).
+2. Choose **Web editor** as the source and paste the contents of
+   `docker-compose.yaml` as-is - the file pulls the ready-built image from
+   `ghcr.io/jake-double-one/wokearr` directly, no build needed.
+   (Alternatively, use **Repository** as the source with compose path
+   `docker-compose.yaml` - Portainer then builds from the repo code itself
+   instead; for that, replace `image:` with `build:` as described in the
+   compose file.)
+3. Under **Environment variables**, set `PLEX_URL`, `PLEX_TOKEN`,
+   `LIBRARY_SECTIONS` (Portainer doesn't automatically read the `.env` file).
 4. **Deploy the stack**.
 
-Für ein Update auf eine neue [Release](https://github.com/Jake-double-one/wokearr/releases)
-reicht in Portainer **Stacks -> woke-score -> Pull and redeploy** (zieht das
-`:latest`-Image neu). Wer eine Version fest pinnen will, ändert den Tag in
-`image:` z. B. auf `:v0.1.0`.
+To update to a new [release](https://github.com/Jake-double-one/wokearr/releases),
+just use **Stacks -> woke-score -> Pull and redeploy** in Portainer (pulls the
+`:latest` image again). To pin a specific version, change the tag in `image:`,
+e.g. to `:v0.1.0`.
 
-## Umgebungsvariablen
+## Environment variables
 
-| Variable           | Pflicht | Standard        | Beschreibung                                      |
+| Variable           | Required | Default        | Description                                      |
 |---------------------|---------|-----------------|----------------------------------------------------|
-| `PLEX_URL`          | ja*     | –               | z. B. `http://192.168.1.10:32400`                  |
-| `PLEX_TOKEN`        | ja*     | –               | [Token finden](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/) |
-| `LIBRARY_SECTIONS`  | nein    | `Filme,Serien`  | Exakte Namen eurer Plex-Bibliotheken, kommagetrennt |
-| `BADGE_POSITION`    | nein    | `top-right`     | `top-right` \| `top-left` \| `bottom-right` \| `bottom-left` |
-| `BADGE_LABEL_STYLE` | nein    | `percent`       | `percent` (`37%`) \| `woke` (`37% woke`) |
-| `BADGE_WIDTH_PERCENT` | nein  | `20`            | Breite der Badge relativ zur Posterbreite, in Prozent. Mindestwert fest bei `20` verankert (kleinere Werte werden automatisch angehoben) |
-| `AUTO_SYNC_INTERVAL_MINUTES` | nein | `0` (aus) | Intervall in Minuten für den kompletten Autopilot-Lauf (Score-Sync, Poster-Cache, aufräumen, automatisch anwenden). `60` für stündlich. |
-| `CACHE_REBUILD_COOLDOWN_MINUTES` | nein | `5` | Mindestabstand zwischen zwei Sitemap-Abrufen (manuell oder automatisch) |
-| `CLEANUP_OLD_POSTERS` | nein | `true` | Nach jedem Übertragen automatisch ältere, selbst hochgeladene Poster-Versionen in Plex löschen (siehe unten) |
+| `PLEX_URL`          | yes*    | –               | e.g. `http://192.168.1.10:32400`                  |
+| `PLEX_TOKEN`        | yes*    | –               | [Find your token](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/) |
+| `LIBRARY_SECTIONS`  | no    | `Filme,Serien`  | Exact names of your Plex libraries, comma-separated |
+| `LANGUAGE`          | no    | `en-US`         | UI language: `en-US` \| `de-DE`. `en-US` is also the fallback for individual missing translations in other languages |
+| `BADGE_POSITION`    | no    | `top-right`     | `top-right` \| `top-left` \| `bottom-right` \| `bottom-left` |
+| `BADGE_LABEL_STYLE` | no    | `percent`       | `percent` (`37%`) \| `woke` (`37% woke`) |
+| `BADGE_WIDTH_PERCENT` | no  | `20`            | Badge width relative to poster width, in percent. Hard-floored at `20` (lower values are automatically raised) |
+| `AUTO_SYNC_INTERVAL_MINUTES` | no | `0` (off) | Interval in minutes for the full autopilot run (score sync, poster cache, cleanup, auto-push). `60` for hourly. |
+| `CACHE_REBUILD_COOLDOWN_MINUTES` | no | `5` | Minimum gap between two sitemap fetches (manual or automatic) |
+| `CLEANUP_OLD_POSTERS` | no | `true` | After every push, automatically delete older, self-uploaded poster versions in Plex (see below) |
 
-\* Ohne diese beiden Variablen läuft die App im Demo-Modus.
+\* Without these two variables, the app runs in demo mode.
 
-Änderungen an Umgebungsvariablen werden erst nach einem **Container-Redeploy**
-übernommen (Portainer: **Update the stack**, nicht nur die Seite neu laden).
-`BADGE_LABEL_STYLE` und `BADGE_WIDTH_PERCENT` wirken sich außerdem nur auf
-Poster aus, die *ab jetzt* neu angewendet werden - Text und Größe sind fest
-ins Bild gebrannt und ändern sich bei schon vorher angewendeten Postern nicht
-rückwirkend von selbst.
+Changes to environment variables only take effect after a **container
+redeploy** (Portainer: **Update the stack**, not just reloading the page).
+`BADGE_LABEL_STYLE` and `BADGE_WIDTH_PERCENT` also only affect posters that
+are pushed *from now on* - the text and size are burned into the image and
+don't change retroactively for posters already pushed.
 
-### PLEX_URL richtig setzen
+### Setting PLEX_URL correctly
 
-Häufigste Fehlerquelle. `PLEX_URL` braucht **Schema + Host + Port**, sonst gibt es
-SSL-/Verbindungsfehler im Log (z. B. `TLSV1_UNRECOGNIZED_NAME` oder
-`Max retries exceeded`):
+The most common source of errors. `PLEX_URL` needs **scheme + host + port**,
+otherwise you'll see SSL/connection errors in the logs (e.g.
+`TLSV1_UNRECOGNIZED_NAME` or `Max retries exceeded`):
 
-- **Schema**: `http://`, nicht `https://` – Plex spricht auf dem lokalen Netz
-  standardmäßig unverschlüsseltes HTTP. `https://` ohne eigenes Zertifikat landet
-  auf Port 443, wo gar kein passender Server antwortet.
-- **Port**: immer `:32400` mit angeben (Plex' Standardport). Ohne Port nimmt
-  `https://` automatisch 443, `http://` automatisch 80 – beides falsch.
-- **Host**: die lokale IP oder der Hostname eures Plex-Servers, aus Sicht des
-  Docker-Hosts/Containers erreichbar (z. B. `192.168.1.10`, nicht `localhost`,
-  außer die App läuft im selben Netzwerk-Namespace wie Plex).
-- Kein Slash am Ende nötig.
+- **Scheme**: `http://`, not `https://` - Plex speaks unencrypted HTTP by
+  default on the local network. `https://` without your own certificate lands
+  on port 443, where no matching server responds.
+- **Port**: always include `:32400` (Plex's default port). Without a port,
+  `https://` defaults to 443 and `http://` to 80 - both wrong.
+- **Host**: the local IP or hostname of your Plex server, reachable from the
+  Docker host/container's point of view (e.g. `192.168.1.10`, not
+  `localhost`, unless the app runs in the same network namespace as Plex).
+- No trailing slash needed.
 
-Richtig: `PLEX_URL=http://192.168.1.10:32400`
-Falsch: `https://192.168.1.10`, `192.168.1.10:32400` (ohne Schema), `http://192.168.1.10` (ohne Port)
+Correct: `PLEX_URL=http://192.168.1.10:32400`
+Wrong: `https://192.168.1.10`, `192.168.1.10:32400` (no scheme), `http://192.168.1.10` (no port)
 
-Im Volume `/data` liegen und überstehen Container-Neustarts/-Updates:
-`score_cache.json` (Score-Datenbank), `originals/` (unbebadgte Poster),
-`branded/` (fertig gerenderte Poster, noch nicht zwingend hochgeladen),
-`rendered_state.json`/`pushed_state.json` (merken sich pro Titel, mit
-welchem Score zuletzt gerendert bzw. zu Plex hochgeladen wurde).
+The `/data` volume holds and survives container restarts/updates:
+`score_cache.json` (score database), `originals/` (unbadged posters),
+`branded/` (fully rendered posters, not necessarily uploaded yet),
+`rendered_state.json`/`pushed_state.json` (track, per title, which score was
+last rendered and last uploaded to Plex).
 
-## Autopilot - automatischer Betrieb
+## Autopilot - automatic operation
 
-`AUTO_SYNC_INTERVAL_MINUTES` auf ein Intervall > 0 setzen (z. B. `60` für
-stündlich) und Wokearr läuft komplett von selbst, ohne dass ihr die UI
-anfassen müsst. Jeder Durchlauf macht der Reihe nach dieselben drei Stufen,
-die unten auch einzeln per Button auslösbar sind:
+Set `AUTO_SYNC_INTERVAL_MINUTES` to an interval > 0 (e.g. `60` for hourly) and
+Wokearr runs entirely on its own, without you needing to touch the UI. Every
+run performs the same three stages in sequence, which can also be triggered
+individually via the buttons below:
 
-1. **Score-Datenbank aktualisieren** – neue/fehlende Titel bei
-   isitwokeornot.com nachziehen (inkrementell).
-2. **Jetzt synchronisieren** (Plex-Abgleich) – für jeden Titel eurer
-   Plex-Bibliothek mit bekanntem Score: fehlendes Original-Poster von Plex
-   holen (`originals/`) und daraus die gebrandete Version rendern
-   (`branded/`), falls noch nicht mit dem aktuellen Score geschehen. Räumt
-   dabei auch lokale Dateien für Titel auf, die nicht mehr in eurer
-   Plex-Bibliothek stehen ("Leichen") - nutzt die ohnehin abgefragte
-   Bibliotheksliste, kostet also keinen zusätzlichen Plex-Request. Lädt noch
-   nichts zu Plex hoch.
-3. **Auf Plex übertragen** – neue Titel oder Titel mit geändertem Score
-   bekommen ihr bereits gerendertes `branded/`-Poster zu Plex hochgeladen;
-   alte eigene Poster-Versionen werden dabei wie gewohnt aufgeräumt (siehe
-   unten). Titel, die schon mit ihrem aktuellen Score hochgeladen sind,
-   werden übersprungen - jeder Lauf im Normalbetrieb ist also ein schneller
-   No-Op-Check, kein voller Durchlauf durch die Bibliothek.
+1. **Update Score Database** - pulls new/missing titles from
+   isitwokeornot.com (incremental).
+2. **Sync Now** (Plex comparison) - for every title in your Plex library with
+   a known score: fetches the missing original poster from Plex
+   (`originals/`) and renders the branded version from it (`branded/`), if
+   not already done with the current score. Also cleans up local files for
+   titles no longer in your Plex library ("orphans") - reuses the library
+   listing it already fetched, so it costs no extra Plex request. Doesn't
+   upload anything to Plex yet.
+3. **Push to Plex** - new titles or titles with a changed score get their
+   already-rendered `branded/` poster uploaded to Plex; old self-uploaded
+   poster versions are cleaned up as usual (see below). Titles already
+   uploaded with their current score are skipped - so every run in normal
+   operation is a quick no-op check, not a full pass through the library.
 
-Der Score-Sync-Schritt teilt sich mit dem manuellen Button unten einen
-gemeinsamen Cooldown (`CACHE_REBUILD_COOLDOWN_MINUTES`, Standard 5 Minuten)
-seit dem letzten Sitemap-Abruf, damit isitwokeornot.com nicht zu häufig
-angefragt wird - ein zu früher Lauf überspringt diese Stufe einfach und macht
-mit den restlichen weiter.
+The score-sync step shares a cooldown (`CACHE_REBUILD_COOLDOWN_MINUTES`,
+default 5 minutes) with the manual button below, counted since the last
+sitemap fetch, so isitwokeornot.com isn't hit too often - a run that's too
+early simply skips this stage and continues with the rest.
 
-## Manuelle Bedienung
+## Manual operation
 
-Für den Normalbetrieb mit aktivem Autopiloten nicht nötig, aber gedacht für
-alle, die den Autopilot bewusst abschalten (`AUTO_SYNC_INTERVAL_MINUTES=0`,
-Standard) und jede Stufe selbst antriggern wollen:
+Not needed for normal operation with the autopilot active, but meant for
+anyone who deliberately turns off the autopilot (`AUTO_SYNC_INTERVAL_MINUTES=0`,
+the default) and wants to trigger each stage themselves:
 
-- **Score-Datenbank aktualisieren** – nur Stufe 1, inkrementell.
-- **Jetzt synchronisieren** – nur Stufe 2 (Plex-Abgleich, Original- und
-  gebrandete Poster pflegen, Leichen entfernen). Kein Push zu Plex.
-- **Auf Plex übertragen** (Alle-Button oder einzeln pro Titel) – nur Stufe 3,
-  erzwungen: lädt das gerenderte Poster unabhängig davon hoch, ob sich der
-  Score seit dem letzten Push geändert hat (z. B. praktisch nach einer
-  geänderten Badge-Einstellung, um alles neu zu erzwingen). Rendert bei
-  Bedarf automatisch nach, falls noch nicht synchronisiert wurde.
-- **Kompletter Neuaufbau** – wie "Score-Datenbank aktualisieren", fragt aber
-  wirklich alle Titel bei isitwokeornot.com erneut ab (z. B. um
-  zwischenzeitlich geänderte Scores nachzuziehen). Dauert entsprechend länger.
-- **Alte Poster in Plex löschen** – siehe nächster Abschnitt.
+- **Update Score Database** - stage 1 only, incremental.
+- **Sync Now** - stage 2 only (Plex comparison, maintain original and branded
+  posters, remove orphans). No push to Plex.
+- **Push to Plex** (the "all" button or per title) - stage 3 only, forced:
+  uploads the rendered poster regardless of whether the score has changed
+  since the last push (useful, e.g., after changing a badge setting, to force
+  everything to re-upload). Renders on demand if not already synced.
+- **Full Rebuild** - like "Update Score Database", but really re-queries
+  every title at isitwokeornot.com (e.g. to pick up scores that changed in
+  the meantime). Takes correspondingly longer.
+- **Delete Old Posters in Plex** - see next section.
 
-Alle Jobs laufen als Hintergrund-Prozess im Container weiter, auch wenn ihr
-die Seite neu ladet, filtert oder den Browser-Tab schließt.
+All jobs keep running as a background process in the container, even if you
+reload the page, filter, or close the browser tab.
 
-### Plex sammelt alte Poster-Versionen an
+### Plex accumulates old poster versions
 
-Plex behält bei jedem hochgeladenen Poster automatisch die vorherige Version
-als "Poster-Historie" (sichtbar in der Poster-Auswahl in Plex) und löscht sie
-nie von selbst - das ist normales Plex-Verhalten, nicht auf dieses Tool
-beschränkt, füllt den Plattenplatz des Plex-Servers aber mit der Zeit spürbar
-(besonders nach mehrfachem Übertragen desselben Titels, z. B. beim Testen).
+Plex automatically keeps the previous version of every uploaded poster as
+"poster history" (visible in Plex's poster picker) and never deletes it on
+its own - this is normal Plex behavior, not specific to this tool, but it
+noticeably fills up the Plex server's disk space over time (especially after
+pushing the same title multiple times, e.g. while testing).
 
-- **Automatisch:** Mit `CLEANUP_OLD_POSTERS=true` (Standard) räumt die App
-  nach jedem Push ("Auf Plex übertragen") alle hochgeladenen Versionen des
-  jeweiligen Titels in Plex weg, außer der gerade aktiven - erkannt an Plex'
-  eigenem Key-Schema für
-  Uploads, nicht am Bildinhalt. Erfasst deshalb auch Uploads von vor diesem
-  Feature. TMDb-/Agent-Poster werden nie angerührt (auch technisch nicht
-  löschbar über die Plex-API). Faustregel: alles, was mal über Wokearr (oder
-  manuell in Plex) hochgeladen wurde und nicht mehr aktiv ist, wird entfernt.
-- **Einmalig für die ganze Bibliothek:** Button **"Alte Poster in Plex
-  löschen"** geht alle Titel durch und räumt bereits angesammelte alte
-  Versionen auf.
-- Das betrifft ausschließlich Plex' eigenen Speicher, nicht den `/data`-Docker-
-  Volume dieser App.
+- **Automatic:** with `CLEANUP_OLD_POSTERS=true` (default), the app removes
+  all uploaded versions of a title in Plex after every push ("Push to
+  Plex"), except the currently active one - detected via Plex's own key
+  scheme for uploads, not by image content. This also catches uploads from
+  before this feature existed. TMDb/agent posters are never touched (and
+  can't technically be deleted via the Plex API either). Rule of thumb:
+  anything ever uploaded via Wokearr (or manually in Plex) that's no longer
+  active gets removed.
+- **One-off, for the whole library:** the **"Delete Old Posters in Plex"**
+  button goes through every title and cleans up already-accumulated old
+  versions.
+- This only affects Plex's own storage, not this app's `/data` Docker volume.
 
-## Hinweise
+## Notes
 
-- Es gibt kein offizielles API von isitwokeornot.com; die Scores werden aus
-  dem strukturierten `schema.org/Review`-Datenblock jeder Titel-Seite
-  gelesen. `robots.txt` der Seite sperrt nur `/api/` und `/admin` – normale
-  Seitenaufrufe sind erlaubt, trotzdem bitte fair bleiben (Standard-Delay im
-  Cache-Skript nicht auf 0 setzen). Normale (nicht-vollständige) Score-Syncs
-  fragen dank `<lastmod>` aus der Sitemap nur neue/geänderte Reviews erneut ab
-  – auf Wunsch des Betreibers, um wiederholte Läufe schlank zu halten. Links
-  zu den Review-Seiten in der UI tragen UTM-Parameter (`utm_source=wokearr`),
-  damit isitwokeornot.com sehen kann, wie viel Traffic Wokearr ihnen zuführt.
-- Dieses Projekt ist ein privates Hobby-Tool ohne Zusammenhang mit
-  isitwokeornot.com, Plex Inc. oder TMDb.
-- Hochgeladene Poster bleiben in Plex i. d. R. als "ausgewählt" erhalten,
-  auch nach einem Metadaten-Refresh. Falls Plex doch das Original
-  zurückholt, lässt sich das Poster in der Plex-Web-UI manuell sperren
-  (Rechtsklick -> Poster -> Lock).
+- There's no official API from isitwokeornot.com; scores are read from the
+  structured `schema.org/Review` data block on each title page. The site's
+  `robots.txt` only blocks `/api/` and `/admin` - normal page requests are
+  allowed, but please stay fair anyway (don't set the cache script's default
+  delay to 0). Normal (non-full) score syncs only re-fetch new/changed
+  reviews thanks to the sitemap's `<lastmod>` - at the operator's request, to
+  keep repeated runs lean. Links to review pages in the UI carry UTM
+  parameters (`utm_source=wokearr`), so isitwokeornot.com can see how much
+  traffic Wokearr sends them.
+- This project is a private hobby tool with no affiliation to
+  isitwokeornot.com, Plex Inc., or TMDb.
+- Uploaded posters generally stay "selected" in Plex, even after a metadata
+  refresh. If Plex does revert to the original, you can manually lock the
+  poster in the Plex web UI (right-click -> Poster -> Lock).
 
-## Lizenz
+## License
 
-MIT, siehe [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).

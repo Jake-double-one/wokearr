@@ -44,6 +44,44 @@ except ValueError:
     BADGE_WIDTH_PERCENT = BADGE_WIDTH_MIN_PERCENT
 BADGE_WIDTH_PERCENT = max(BADGE_WIDTH_PERCENT, BADGE_WIDTH_MIN_PERCENT)
 
+# Sprache der UI (Template, JS-Toasts, Job-Logs/Fehlermeldungen im Browser).
+# en-US ist Default UND Fallback fuer einzelne fehlende Keys in anderen
+# Sprachen (z.B. eine unvollstaendige, spaeter beigetragene dritte Sprache).
+DEFAULT_LANGUAGE = "en-US"
+LOCALES_DIR = Path(__file__).parent / "locales"
+LANGUAGE = os.environ.get("LANGUAGE", DEFAULT_LANGUAGE)
+
+
+def _load_locale(lang: str) -> dict:
+    path = LOCALES_DIR / f"{lang}.json"
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+_FALLBACK_TRANSLATIONS = _load_locale(DEFAULT_LANGUAGE)
+if LANGUAGE != DEFAULT_LANGUAGE and not (LOCALES_DIR / f"{LANGUAGE}.json").exists():
+    print(f"[i18n] Keine Locale-Datei fuer LANGUAGE={LANGUAGE!r} gefunden, falle auf {DEFAULT_LANGUAGE} zurueck.",
+          flush=True)
+    # LANGUAGE selbst mit zurueckfallen lassen (nicht nur einzelne Keys) - sonst
+    # zeigt z.B. <html lang="fr"> auf tatsaechlich komplett englischen Text.
+    LANGUAGE = DEFAULT_LANGUAGE
+# Pro Key: aktive Sprache, sonst en-US - so ist jeder Key garantiert vorhanden,
+# ohne dass Frontend/Backend selbst eine Fallback-Logik nachbauen muessen.
+TRANSLATIONS = {**_FALLBACK_TRANSLATIONS, **_load_locale(LANGUAGE)}
+
+
+def t(key: str, **kwargs) -> str:
+    template = TRANSLATIONS.get(key, key)
+    if not kwargs:
+        return template
+    try:
+        return template.format(**kwargs)
+    except (KeyError, IndexError):
+        # Kaputtes/inkonsistentes Uebersetzungs-Template darf nie einen
+        # Request zum Absturz bringen - im Zweifel unformatiert anzeigen.
+        return template
+
 # Plex behaelt bei jedem uploadPoster() die vorherige Version als Poster-Historie
 # und loescht sie nie von selbst - laesst den Plex-Server sonst zuwachsen. Nach
 # jedem Anwenden werden deshalb standardmaessig aeltere, selbst hochgeladene
@@ -87,6 +125,7 @@ PUSHED_STATE_FILE = DATA_DIR / "pushed_state.json"
 # ---------------------------------------------------------------------------
 
 app = Flask(__name__)
+app.jinja_env.globals["t"] = t
 JOBS = {}  # job_id -> {"state": "running"/"done"/"error", "progress": [n, total], "log": [...]}
 
 _rebuild_lock = threading.Lock()
@@ -302,7 +341,7 @@ def render_branded_image(item, entry: dict, force: bool = False) -> Path:
 
     original_path = ORIGINALS_DIR / f"{rk}.jpg"
     if not original_path.exists():
-        raise FileNotFoundError(f"Kein Original-Poster fuer '{item.title}' im Cache - erst synchronisieren.")
+        raise FileNotFoundError(t("render.missing_original", title=item.title))
 
     add_badge(
         str(original_path),
@@ -329,7 +368,7 @@ def push_to_plex(plex, item, entry: dict, force: bool = False) -> str:
     if CLEANUP_OLD_POSTERS:
         cleanup_old_uploaded_posters(plex, item)
     _record_state(PUSHED_STATE_FILE, item.ratingKey, entry["score"])
-    return f"OK: {item.title}"
+    return t("push.ok", title=item.title)
 
 
 def _current_library_items(plex) -> dict:
@@ -360,7 +399,7 @@ def score_sync(log=None) -> None:
     per Button "Score-Datenbank aktualisieren" oder Teil des Autopiloten."""
     wait = _reserve_rebuild_slot()
     if wait:
-        _emit(log, f"Score-Sync uebersprungen (Cooldown, noch {int(wait)}s aktiv).")
+        _emit(log, t("score_sync.cooldown", seconds=int(wait)))
         return
     import build_score_cache as bsc
     cache = load_cache()
@@ -371,10 +410,10 @@ def score_sync(log=None) -> None:
 
     cache, processed = bsc.build_cache(cache, on_progress=on_progress)
     CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
-    _emit(log, f"Score-Sync: {processed} neue Titel, {len(cache)} insgesamt im Cache.")
+    _emit(log, t("score_sync.done", processed=processed, total=len(cache)))
 
 
-def sync_library(log=None) -> None:
+def sync_library(log=None) -> list[str]:
     """
     Stufe 2 - Plex-Abgleich, ohne irgendetwas zu Plex hochzuladen:
       - fehlende Original-Poster fuer Titel mit Score nachladen (ORIGINALS_DIR)
@@ -382,10 +421,15 @@ def sync_library(log=None) -> None:
         aktuellen Score geschehen (BRANDED_DIR, siehe render_branded_image)
       - lokale Original-/Branded-Dateien fuer Titel loeschen, die nicht mehr
         in der (hier ohnehin abgefragten) Plex-Bibliothek stehen ("Leichen")
+
+    Gibt die Titel zurueck, fuer die kein TMDb-Original gefunden wurde (siehe
+    "missing_originals" in api_sync_library) - unabhaengig von der Sprache
+    ausgewertet, damit das Frontend-Popup nicht auf uebersetzten Log-Text
+    angewiesen ist.
     """
     if demo_mode():
-        _emit(log, "Demo-Modus: kein Plex konfiguriert.")
-        return
+        _emit(log, t("sync.demo_mode"))
+        return []
 
     cache = load_cache()
     plex = get_plex()
@@ -412,12 +456,10 @@ def sync_library(log=None) -> None:
                     if not found:
                         warnings.append(item.title)
                 except Exception as e:
-                    _emit(log, f"Fehler beim Original-Poster holen ({item.title}): {e}")
-        _emit(log, f"Original-Poster: {len(to_warm)} neue geholt.")
+                    _emit(log, t("sync.poster_fetch_error", title=item.title, error=e))
+        _emit(log, t("sync.posters_fetched", count=len(to_warm)))
     if warnings:
-        _emit(log, "Warnung: kein TMDb-Original in Plex gefunden fuer: " + ", ".join(warnings) +
-              " - aktuelles Poster wurde als Basis genutzt (evtl. doppelter Badge). "
-              "Fix: in Plex 'Metadaten aktualisieren', danach erneut synchronisieren.")
+        _emit(log, t("sync.missing_originals_warning", titles=", ".join(warnings)))
 
     # Gebrandete Version fuer neue/geaenderte Titel rendern
     rendered_state = _load_state_file(RENDERED_STATE_FILE)
@@ -431,9 +473,9 @@ def sync_library(log=None) -> None:
             render_branded_image(item, entry)
             rendered += 1
         except Exception as e:
-            _emit(log, f"Fehler beim Rendern ({item.title}): {e}")
+            _emit(log, t("sync.render_error", title=item.title, error=e))
     if rendered:
-        _emit(log, f"Gebrandete Poster gerendert: {rendered}.")
+        _emit(log, t("sync.rendered_count", count=rendered))
 
     # Leichen entfernen (Titel nicht mehr in Plex) - in beiden lokalen Ordnern
     removed = 0
@@ -446,10 +488,12 @@ def sync_library(log=None) -> None:
                 except OSError:
                     pass
     if removed:
-        _emit(log, f"Leichen entfernt: {removed} Datei(en) fuer nicht mehr vorhandene Titel.")
+        _emit(log, t("sync.orphans_removed", count=removed))
 
     if not to_warm and not to_render and not removed:
-        _emit(log, "Synchronisiert: nichts Neues.")
+        _emit(log, t("sync.nothing_new"))
+
+    return warnings
 
 
 def push_pending_to_plex(log=None, progress=None, force: bool = False, rating_keys=None) -> None:
@@ -465,7 +509,7 @@ def push_pending_to_plex(log=None, progress=None, force: bool = False, rating_ke
     fuer eine Fortschrittsanzeige in der UI.
     """
     if demo_mode():
-        _emit(log, "Demo-Modus: kein Plex zum Uebertragen.")
+        _emit(log, t("push.demo_mode"))
         return
 
     cache = load_cache()
@@ -488,7 +532,7 @@ def push_pending_to_plex(log=None, progress=None, force: bool = False, rating_ke
             to_push.append((item, entry))
 
     if not to_push:
-        _emit(log, "Nichts zu uebertragen.")
+        _emit(log, t("push.nothing_to_push"))
         if progress:
             progress(0, 0)
         return
@@ -501,7 +545,7 @@ def push_pending_to_plex(log=None, progress=None, force: bool = False, rating_ke
         try:
             _emit(log, push_to_plex(plex, item, entry, force))
         except Exception as e:
-            _emit(log, f"Fehler beim Uebertragen ({item.title}): {e}")
+            _emit(log, t("push.error", title=item.title, error=e))
         finally:
             if progress:
                 with progress_lock:
@@ -561,7 +605,13 @@ if AUTO_SYNC_INTERVAL_MINUTES > 0:
 
 @app.route("/")
 def index():
-    return render_template("index.html", demo=demo_mode(), badge_label_style=BADGE_LABEL_STYLE)
+    return render_template(
+        "index.html",
+        demo=demo_mode(),
+        badge_label_style=BADGE_LABEL_STYLE,
+        language=LANGUAGE,
+        i18n=TRANSLATIONS,
+    )
 
 
 @app.route("/healthz")
@@ -645,13 +695,10 @@ def api_rebuild_cache():
 
     wait = _reserve_rebuild_slot()
     if wait:
-        return jsonify({
-            "error": f"Bitte kurz warten: naechster Sitemap-Abruf erst in {int(wait) + 1}s moeglich (Cooldown "
-                     f"schuetzt isitwokeornot.com vor zu haeufigen Anfragen)."
-        }), 429
+        return jsonify({"error": t("rebuild_cache.cooldown_error", seconds=int(wait) + 1)}), 429
 
     job_id = str(uuid.uuid4())
-    JOBS[job_id] = {"state": "running", "progress": [0, 0], "log": ["Sitemap wird geladen..."]}
+    JOBS[job_id] = {"state": "running", "progress": [0, 0], "log": [t("rebuild_cache.loading")]}
 
     def run():
         try:
@@ -666,7 +713,7 @@ def api_rebuild_cache():
             cache, processed = bsc.build_cache(cache, on_progress=on_progress, skip_existing=not full)
             CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
             JOBS[job_id]["state"] = "done"
-            JOBS[job_id]["log"].append(f"Fertig: {processed} Titel verarbeitet, {len(cache)} insgesamt im Cache.")
+            JOBS[job_id]["log"].append(t("rebuild_cache.done", processed=processed, total=len(cache)))
         except Exception as e:
             JOBS[job_id]["state"] = "error"
             JOBS[job_id]["log"].append(str(e))
@@ -681,14 +728,15 @@ def api_sync_library():
     Version rendern, entfernte Titel aufraeumen. Kein Push zu Plex (siehe
     /api/apply dafuer)."""
     if demo_mode():
-        return jsonify({"error": "Demo-Modus: keine Plex-Bibliothek zum Abgleichen."}), 400
+        return jsonify({"error": t("api.sync_library.demo_error")}), 400
 
     job_id = str(uuid.uuid4())
     JOBS[job_id] = {"state": "running", "progress": [0, 0], "log": []}
 
     def run():
         try:
-            sync_library(log=lambda msg: JOBS[job_id]["log"].append(msg))
+            missing_originals = sync_library(log=lambda msg: JOBS[job_id]["log"].append(msg))
+            JOBS[job_id]["missing_originals"] = missing_originals
             JOBS[job_id]["state"] = "done"
         except Exception as e:
             JOBS[job_id]["state"] = "error"
@@ -705,7 +753,7 @@ def api_apply():
     davon, ob der Score sich seit dem letzten Push geaendert hat. Rendert bei
     Bedarf automatisch nach (siehe push_to_plex)."""
     if demo_mode():
-        return jsonify({"error": "Demo-Modus: PLEX_URL/PLEX_TOKEN als Umgebungsvariablen setzen, um wirklich zu uebertragen."}), 400
+        return jsonify({"error": t("api.apply.demo_error")}), 400
 
     payload = request.get_json(force=True)
     rating_keys = [str(rk) for rk in payload.get("ratingKeys", [])]
@@ -735,7 +783,7 @@ def api_cleanup_posters():
     hochgeladene Poster-Versionen aus Plex (siehe cleanup_old_uploaded_posters).
     Unabhaengig von CLEANUP_OLD_POSTERS immer verfuegbar, da explizit ausgeloest."""
     if demo_mode():
-        return jsonify({"error": "Demo-Modus: keine Plex-Bibliothek zum Aufraeumen."}), 400
+        return jsonify({"error": t("api.cleanup.demo_error")}), 400
 
     job_id = str(uuid.uuid4())
     JOBS[job_id] = {"state": "running", "progress": [0, 0], "log": []}
@@ -761,7 +809,7 @@ def api_cleanup_posters():
                     removed = cleanup_old_uploaded_posters(plex, item)
                 except Exception as e:
                     removed = 0
-                    JOBS[job_id]["log"].append(f"Fehler bei {getattr(item, 'title', '?')}: {e}")
+                    JOBS[job_id]["log"].append(t("cleanup.item_error", title=getattr(item, "title", "?"), error=e))
                 with progress_lock:
                     done += 1
                     removed_total += removed
@@ -773,7 +821,7 @@ def api_cleanup_posters():
                     pass
 
             JOBS[job_id]["state"] = "done"
-            JOBS[job_id]["log"].append(f"Fertig: {removed_total} alte Poster-Versionen in Plex entfernt.")
+            JOBS[job_id]["log"].append(t("cleanup.done", count=removed_total))
         except Exception as e:
             JOBS[job_id]["state"] = "error"
             JOBS[job_id]["log"].append(str(e))

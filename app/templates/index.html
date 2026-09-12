@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="{{ language[:2] }}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,36 +14,36 @@
     <span class="brand-name">Wokearr</span>
   </div>
   <div class="topbar-actions">
-    <span id="demo-flag" class="demo-flag" style="display:none">Demo-Modus – Plex nicht konfiguriert</span>
+    <span id="demo-flag" class="demo-flag" style="display:none">{{ t('topbar.demo_flag') }}</span>
     <div class="action-group">
-      <button id="btn-rebuild" class="btn btn-ghost" title="Stufe 1: Scores von isitwokeornot.com aktualisieren (inkrementell)">Score-Datenbank aktualisieren</button>
-      <button id="btn-sync-library" class="btn btn-primary" title="Stufe 2: mit Plex abgleichen, Original-Poster holen und Badge lokal rendern (ohne hochzuladen)">Jetzt synchronisieren</button>
-      <button id="btn-apply-all" class="btn btn-primary" title="Stufe 3: gerenderte Poster zu Plex hochladen">Auf Plex übertragen</button>
+      <button id="btn-rebuild" class="btn btn-ghost" title="{{ t('topbar.btn_rebuild.title') }}">{{ t('topbar.btn_rebuild.label') }}</button>
+      <button id="btn-sync-library" class="btn btn-primary" title="{{ t('topbar.btn_sync_library.title') }}">{{ t('topbar.btn_sync_library.label') }}</button>
+      <button id="btn-apply-all" class="btn btn-primary" title="{{ t('topbar.btn_apply_all.title') }}">{{ t('topbar.btn_apply_all.label') }}</button>
     </div>
     <div class="action-group action-group-secondary">
-      <button id="btn-rebuild-full" class="btn btn-ghost btn-small" title="Fragt alle Titel erneut ab (dauert deutlich länger)">Kompletter Neuaufbau</button>
-      <button id="btn-cleanup-posters" class="btn btn-ghost btn-small" title="Löscht alte, selbst hochgeladene Poster-Versionen in Plex (Poster-Historie), die sich über die Zeit ansammeln">Alte Poster in Plex löschen</button>
+      <button id="btn-rebuild-full" class="btn btn-ghost btn-small" title="{{ t('topbar.btn_rebuild_full.title') }}">{{ t('topbar.btn_rebuild_full.label') }}</button>
+      <button id="btn-cleanup-posters" class="btn btn-ghost btn-small" title="{{ t('topbar.btn_cleanup_posters.title') }}">{{ t('topbar.btn_cleanup_posters.label') }}</button>
     </div>
   </div>
 </header>
 
 <nav class="filterbar">
-  <button class="chip chip-active" data-filter="all">Alle <span class="count" id="count-all">0</span></button>
-  <button class="chip" data-filter="red"><span class="dot dot-red"></span>Rot <span class="count" id="count-red">0</span></button>
-  <button class="chip" data-filter="yellow"><span class="dot dot-yellow"></span>Gelb <span class="count" id="count-yellow">0</span></button>
-  <button class="chip" data-filter="green"><span class="dot dot-green"></span>Grün <span class="count" id="count-green">0</span></button>
+  <button class="chip chip-active" data-filter="all">{{ t('filter.all') }} <span class="count" id="count-all">0</span></button>
+  <button class="chip" data-filter="red"><span class="dot dot-red"></span>{{ t('filter.red') }} <span class="count" id="count-red">0</span></button>
+  <button class="chip" data-filter="yellow"><span class="dot dot-yellow"></span>{{ t('filter.yellow') }} <span class="count" id="count-yellow">0</span></button>
+  <button class="chip" data-filter="green"><span class="dot dot-green"></span>{{ t('filter.green') }} <span class="count" id="count-green">0</span></button>
 </nav>
 
 <main>
   <div id="grid" class="grid"></div>
   <p id="empty-state" class="empty-state" style="display:none">
-    Keine Titel mit Woke-Score gefunden. "Jetzt synchronisieren" klicken oder PLEX_URL/PLEX_TOKEN pruefen.
+    {{ t('empty_state') }}
   </p>
 </main>
 
 <footer class="app-footer">
-  Score-Daten von <a href="https://isitwokeornot.com/" target="_blank" rel="noopener noreferrer">isitwokeornot.com</a>
-  &middot; kein offizielles Tool von isitwokeornot.com, Plex Inc. oder TMDb
+  {{ t('footer.source_prefix') }} <a href="https://isitwokeornot.com/" target="_blank" rel="noopener noreferrer">isitwokeornot.com</a>
+  &middot; {{ t('footer.disclaimer') }}
 </footer>
 
 <div id="toast" class="toast" style="display:none">
@@ -54,6 +54,7 @@
 <script>
   window.__DEMO__ = {{ demo | tojson }};
   window.__BADGE_LABEL_STYLE__ = {{ badge_label_style | tojson }};
+  window.__I18N__ = {{ i18n | tojson }};
 </script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>

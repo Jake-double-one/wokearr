@@ -181,14 +181,6 @@ beschränkt, füllt den Plattenplatz des Plex-Servers aber mit der Zeit spürbar
 - Das betrifft ausschließlich Plex' eigenen Speicher, nicht den `/data`-Docker-
   Volume dieser App.
 
-## Eigenes Image bauen und veröffentlichen
-
-Der mitgelieferte Workflow `.github/workflows/docker-publish.yml` baut das
-Image bei jedem Push auf `main` (und bei Version-Tags `v*`) automatisch und
-veröffentlicht es nach `ghcr.io/jake-double-one/wokearr`. Dafür ist keine
-zusätzliche Konfiguration nötig, GitHub Actions nutzt den eingebauten
-`GITHUB_TOKEN`.
-
 ## Hinweise
 
 - Es gibt kein offizielles API von isitwokeornot.com; die Scores werden aus

@@ -16,6 +16,7 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 import requests
 from flask import Flask, jsonify, request, send_file, render_template
@@ -124,6 +125,21 @@ def tmdb_id_from_item(item):
         if guid.id.startswith("tmdb://"):
             return guid.id.split("tmdb://", 1)[1]
     return None
+
+
+# UTM-Parameter auf Links zu Review-Seiten von isitwokeornot.com, damit der
+# Betreiber sehen kann, wie viel Traffic Wokearr ihm zufuehrt (auf dessen
+# eigenen Wunsch hin).
+REVIEW_LINK_UTM = {"utm_source": "wokearr", "utm_medium": "referral", "utm_campaign": "poster_badge"}
+
+
+def _with_utm(url: str | None) -> str | None:
+    if not url:
+        return url
+    parts = urlsplit(url)
+    query = dict(parse_qsl(parts.query))
+    query.update(REVIEW_LINK_UTM)
+    return urlunsplit(parts._replace(query=urlencode(query)))
 
 
 def _is_own_badge(img_bytes: bytes | None) -> bool | None:
@@ -582,7 +598,7 @@ def api_library():
                 "year": it.year,
                 "score": entry["score"],
                 "type": section.type,
-                "sourceUrl": entry.get("url"),
+                "sourceUrl": _with_utm(entry.get("url")),
             })
     return jsonify({"demo": False, "items": items})
 

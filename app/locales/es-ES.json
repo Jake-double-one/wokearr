@@ -1,0 +1,70 @@
+{
+  "topbar.demo_flag": "Modo demo – Plex no configurado",
+  "topbar.btn_rebuild.label": "Actualizar base de datos de puntuaciones",
+  "topbar.btn_rebuild.title": "Etapa 1: actualizar puntuaciones desde isitwokeornot.com (incremental)",
+  "topbar.btn_sync_library.label": "Sincronizar ahora",
+  "topbar.btn_sync_library.title": "Etapa 2: comparar con Plex, obtener carátulas originales y renderizar la insignia localmente (sin subir)",
+  "topbar.btn_apply_all.label": "Subir a Plex",
+  "topbar.btn_apply_all.title": "Etapa 3: subir carátulas renderizadas a Plex",
+  "topbar.btn_rebuild_full.label": "Reconstrucción completa",
+  "topbar.btn_rebuild_full.title": "Vuelve a consultar todos los títulos (tarda notablemente más)",
+  "topbar.btn_cleanup_posters.label": "Eliminar carátulas antiguas en Plex",
+  "topbar.btn_cleanup_posters.title": "Elimina versiones antiguas de carátulas subidas por nosotros en Plex (historial de carátulas) que se acumulan con el tiempo",
+
+  "filter.all": "Todos",
+  "filter.red": "Rojo",
+  "filter.yellow": "Amarillo",
+  "filter.green": "Verde",
+
+  "empty_state": "No se encontraron títulos con puntuación woke. Haz clic en \"Sincronizar ahora\" o revisa PLEX_URL/PLEX_TOKEN.",
+
+  "footer.source_prefix": "Datos de puntuación de",
+  "footer.disclaimer": "no es una herramienta oficial de isitwokeornot.com, Plex Inc. ni TMDb",
+
+  "card.push": "Subir",
+  "card.push_done": "Listo",
+  "card.loading": "...",
+  "card.source_title": "Fuente: isitwokeornot.com",
+
+  "toast.uploading_posters": "Subiendo carátulas",
+  "toast.building_cache": "Construyendo caché",
+  "toast.syncing_with_plex": "Sincronizando con Plex",
+  "toast.cleaning_posters": "Limpiando carátulas de Plex",
+  "toast.suffix_done": "listo",
+  "toast.suffix_error": "error",
+
+  "confirm.full_rebuild": "¿Iniciar una reconstrucción completa? Esto vuelve a consultar todos los títulos y tarda notablemente más que una actualización normal.",
+  "confirm.cleanup_posters": "¿Eliminar versiones antiguas de carátulas subidas por nosotros en toda la biblioteca de Plex?\n\nLas carátulas actualmente seleccionadas no se modifican - solo se eliminan las versiones antiguas sin usar. Las carátulas originales de TMDb y otros no se tocan.",
+
+  "alert.missing_originals": "Advertencia: no se encontró carátula original de TMDb en Plex para: {titles} - se usó la carátula actual como base (posible insignia duplicada). Solución: ejecuta 'Actualizar metadatos' en Plex y vuelve a sincronizar.",
+
+  "score_sync.cooldown": "Sincronización de puntuaciones omitida (tiempo de espera, quedan {seconds}s).",
+  "score_sync.done": "Sincronización de puntuaciones: {processed} títulos nuevos, {total} en total en la caché.",
+
+  "sync.demo_mode": "Modo demo: no hay Plex configurado.",
+  "sync.poster_fetch_error": "Error al obtener la carátula original ({title}): {error}",
+  "sync.posters_fetched": "Carátulas originales: {count} obtenidas recientemente.",
+  "sync.missing_originals_warning": "Advertencia: no se encontró carátula original de TMDb en Plex para: {titles} - se usó la carátula actual como base (posible insignia duplicada). Solución: ejecuta 'Actualizar metadatos' en Plex y vuelve a sincronizar.",
+  "sync.render_error": "Error al renderizar ({title}): {error}",
+  "sync.rendered_count": "Carátulas con insignia renderizadas: {count}.",
+  "sync.orphans_removed": "Huérfanos eliminados: {count} archivo(s) de títulos que ya no existen.",
+  "sync.nothing_new": "Sincronizado: nada nuevo.",
+
+  "push.demo_mode": "Modo demo: no hay Plex al que subir.",
+  "push.nothing_to_push": "Nada que subir.",
+  "push.error": "Error al subir ({title}): {error}",
+  "push.ok": "OK: {title}",
+
+  "render.missing_original": "No hay carátula original para '{title}' en la caché - sincroniza primero.",
+
+  "rebuild_cache.cooldown_error": "Espera un momento: la próxima consulta del sitemap será posible en {seconds}s (el tiempo de espera protege a isitwokeornot.com de solicitudes demasiado frecuentes).",
+  "rebuild_cache.loading": "Cargando sitemap...",
+  "rebuild_cache.done": "Listo: {processed} títulos procesados, {total} en total en la caché.",
+
+  "api.sync_library.demo_error": "Modo demo: no hay biblioteca de Plex con la que sincronizar.",
+  "api.apply.demo_error": "Modo demo: define PLEX_URL/PLEX_TOKEN como variables de entorno para subir de verdad.",
+  "api.cleanup.demo_error": "Modo demo: no hay biblioteca de Plex que limpiar.",
+
+  "cleanup.item_error": "Error para {title}: {error}",
+  "cleanup.done": "Listo: {count} versiones antiguas de carátulas eliminadas en Plex."
+}

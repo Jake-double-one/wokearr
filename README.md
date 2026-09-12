@@ -68,7 +68,7 @@ e.g. to `:v0.1.0`.
 | `PLEX_URL`          | yes*    | –               | e.g. `http://192.168.1.10:32400`                  |
 | `PLEX_TOKEN`        | yes*    | –               | [Find your token](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/) |
 | `LIBRARY_SECTIONS`  | no    | `Filme,Serien`  | Exact names of your Plex libraries, comma-separated |
-| `LANGUAGE`          | no    | `en-US`         | UI language: `en-US` \| `de-DE`. `en-US` is also the fallback for individual missing translations in other languages |
+| `LANGUAGE`          | no    | `en-US`         | UI language: `en-US` \| `de-DE` \| `fr-FR` \| `es-ES` \| `it-IT`. `en-US` is also the fallback for individual missing translations in other languages |
 | `BADGE_POSITION`    | no    | `top-right`     | `top-right` \| `top-left` \| `bottom-right` \| `bottom-left` |
 | `BADGE_LABEL_STYLE` | no    | `percent`       | `percent` (`37%`) \| `woke` (`37% woke`) |
 | `BADGE_WIDTH_PERCENT` | no  | `20`            | Badge width relative to poster width, in percent. Hard-floored at `20` (lower values are automatically raised) |

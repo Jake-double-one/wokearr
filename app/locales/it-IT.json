@@ -1,0 +1,70 @@
+{
+  "topbar.demo_flag": "Modalità demo – Plex non configurato",
+  "topbar.btn_rebuild.label": "Aggiorna database dei punteggi",
+  "topbar.btn_rebuild.title": "Fase 1: aggiorna i punteggi da isitwokeornot.com (incrementale)",
+  "topbar.btn_sync_library.label": "Sincronizza ora",
+  "topbar.btn_sync_library.title": "Fase 2: confronta con Plex, scarica le locandine originali e crea il badge localmente (senza caricare)",
+  "topbar.btn_apply_all.label": "Carica su Plex",
+  "topbar.btn_apply_all.title": "Fase 3: carica le locandine elaborate su Plex",
+  "topbar.btn_rebuild_full.label": "Ricostruzione completa",
+  "topbar.btn_rebuild_full.title": "Ricontrolla ogni titolo (richiede molto più tempo)",
+  "topbar.btn_cleanup_posters.label": "Elimina vecchie locandine in Plex",
+  "topbar.btn_cleanup_posters.title": "Elimina le vecchie versioni delle locandine caricate da noi in Plex (cronologia locandine) che si accumulano nel tempo",
+
+  "filter.all": "Tutti",
+  "filter.red": "Rosso",
+  "filter.yellow": "Giallo",
+  "filter.green": "Verde",
+
+  "empty_state": "Nessun titolo con punteggio woke trovato. Fai clic su \"Sincronizza ora\" o controlla PLEX_URL/PLEX_TOKEN.",
+
+  "footer.source_prefix": "Dati dei punteggi da",
+  "footer.disclaimer": "non è uno strumento ufficiale di isitwokeornot.com, Plex Inc. o TMDb",
+
+  "card.push": "Carica",
+  "card.push_done": "Fatto",
+  "card.loading": "...",
+  "card.source_title": "Fonte: isitwokeornot.com",
+
+  "toast.uploading_posters": "Caricamento locandine in corso",
+  "toast.building_cache": "Creazione della cache",
+  "toast.syncing_with_plex": "Sincronizzazione con Plex",
+  "toast.cleaning_posters": "Pulizia locandine Plex",
+  "toast.suffix_done": "fatto",
+  "toast.suffix_error": "errore",
+
+  "confirm.full_rebuild": "Avviare una ricostruzione completa? Questo ricontrolla ogni titolo e richiede molto più tempo di un aggiornamento normale.",
+  "confirm.cleanup_posters": "Eliminare le vecchie versioni delle locandine caricate da noi in tutta la libreria Plex?\n\nLe locandine attualmente selezionate non vengono toccate - vengono rimosse solo le versioni precedenti non utilizzate. Le locandine originali di TMDb e altri non vengono toccate.",
+
+  "alert.missing_originals": "Attenzione: nessuna locandina originale TMDb trovata in Plex per: {titles} - la locandina attuale è stata usata come base (possibile badge doppio). Soluzione: esegui 'Aggiorna metadati' in Plex, poi sincronizza di nuovo.",
+
+  "score_sync.cooldown": "Sincronizzazione punteggi saltata (tempo di attesa, mancano ancora {seconds}s).",
+  "score_sync.done": "Sincronizzazione punteggi: {processed} nuovi titoli, {total} totali in cache.",
+
+  "sync.demo_mode": "Modalità demo: nessun Plex configurato.",
+  "sync.poster_fetch_error": "Errore nel recupero della locandina originale ({title}): {error}",
+  "sync.posters_fetched": "Locandine originali: {count} recuperate di recente.",
+  "sync.missing_originals_warning": "Attenzione: nessuna locandina originale TMDb trovata in Plex per: {titles} - la locandina attuale è stata usata come base (possibile badge doppio). Soluzione: esegui 'Aggiorna metadati' in Plex, poi sincronizza di nuovo.",
+  "sync.render_error": "Errore durante il rendering ({title}): {error}",
+  "sync.rendered_count": "Locandine con badge create: {count}.",
+  "sync.orphans_removed": "Orfani rimossi: {count} file per titoli non più presenti.",
+  "sync.nothing_new": "Sincronizzato: nessuna novità.",
+
+  "push.demo_mode": "Modalità demo: nessun Plex a cui caricare.",
+  "push.nothing_to_push": "Niente da caricare.",
+  "push.error": "Errore durante il caricamento ({title}): {error}",
+  "push.ok": "OK: {title}",
+
+  "render.missing_original": "Nessuna locandina originale per '{title}' in cache - sincronizza prima.",
+
+  "rebuild_cache.cooldown_error": "Attendi un momento: il prossimo recupero della sitemap sarà possibile tra {seconds}s (il tempo di attesa protegge isitwokeornot.com da richieste troppo frequenti).",
+  "rebuild_cache.loading": "Caricamento sitemap...",
+  "rebuild_cache.done": "Fatto: {processed} titoli elaborati, {total} totali in cache.",
+
+  "api.sync_library.demo_error": "Modalità demo: nessuna libreria Plex con cui sincronizzare.",
+  "api.apply.demo_error": "Modalità demo: imposta PLEX_URL/PLEX_TOKEN come variabili d'ambiente per caricare davvero.",
+  "api.cleanup.demo_error": "Modalità demo: nessuna libreria Plex da pulire.",
+
+  "cleanup.item_error": "Errore per {title}: {error}",
+  "cleanup.done": "Fatto: {count} vecchie versioni di locandine rimosse in Plex."
+}

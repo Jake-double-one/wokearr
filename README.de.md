@@ -68,7 +68,7 @@ reicht in Portainer **Stacks -> wokearr -> Pull and redeploy** (zieht das
 | `PLEX_URL`          | ja*     | –               | z. B. `http://192.168.1.10:32400`                  |
 | `PLEX_TOKEN`        | ja*     | –               | [Token finden](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/) |
 | `LIBRARY_SECTIONS`  | nein    | `Filme,Serien`  | Exakte Namen eurer Plex-Bibliotheken, kommagetrennt |
-| `LANGUAGE`          | nein    | `en-US`         | Sprache der Oberfläche: `en-US` \| `de-DE`. `en-US` ist gleichzeitig Fallback für einzelne fehlende Übersetzungen in anderen Sprachen |
+| `LANGUAGE`          | nein    | `en-US`         | Sprache der Oberfläche: `en-US` \| `de-DE` \| `fr-FR` \| `es-ES` \| `it-IT`. `en-US` ist gleichzeitig Fallback für einzelne fehlende Übersetzungen in anderen Sprachen |
 | `BADGE_POSITION`    | nein    | `top-right`     | `top-right` \| `top-left` \| `bottom-right` \| `bottom-left` |
 | `BADGE_LABEL_STYLE` | nein    | `percent`       | `percent` (`37%`) \| `woke` (`37% woke`) |
 | `BADGE_WIDTH_PERCENT` | nein  | `20`            | Breite der Badge relativ zur Posterbreite, in Prozent. Mindestwert fest bei `20` verankert (kleinere Werte werden automatisch angehoben) |

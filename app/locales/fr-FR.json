@@ -1,0 +1,70 @@
+{
+  "topbar.demo_flag": "Mode démo – Plex non configuré",
+  "topbar.btn_rebuild.label": "Mettre à jour la base de scores",
+  "topbar.btn_rebuild.title": "Étape 1 : actualiser les scores depuis isitwokeornot.com (incrémental)",
+  "topbar.btn_sync_library.label": "Synchroniser maintenant",
+  "topbar.btn_sync_library.title": "Étape 2 : comparer avec Plex, récupérer les affiches originales et générer le badge localement (sans envoi)",
+  "topbar.btn_apply_all.label": "Envoyer vers Plex",
+  "topbar.btn_apply_all.title": "Étape 3 : envoyer les affiches générées vers Plex",
+  "topbar.btn_rebuild_full.label": "Reconstruction complète",
+  "topbar.btn_rebuild_full.title": "Réinterroge chaque titre (nettement plus long)",
+  "topbar.btn_cleanup_posters.label": "Supprimer les anciennes affiches dans Plex",
+  "topbar.btn_cleanup_posters.title": "Supprime les anciennes versions d'affiches envoyées par nos soins dans Plex (historique des affiches) qui s'accumulent avec le temps",
+
+  "filter.all": "Tous",
+  "filter.red": "Rouge",
+  "filter.yellow": "Jaune",
+  "filter.green": "Vert",
+
+  "empty_state": "Aucun titre avec un score woke trouvé. Cliquez sur \"Synchroniser maintenant\" ou vérifiez PLEX_URL/PLEX_TOKEN.",
+
+  "footer.source_prefix": "Données de score depuis",
+  "footer.disclaimer": "outil non officiel d'isitwokeornot.com, Plex Inc. ou TMDb",
+
+  "card.push": "Envoyer",
+  "card.push_done": "Terminé",
+  "card.loading": "...",
+  "card.source_title": "Source : isitwokeornot.com",
+
+  "toast.uploading_posters": "Envoi des affiches en cours",
+  "toast.building_cache": "Construction du cache",
+  "toast.syncing_with_plex": "Synchronisation avec Plex",
+  "toast.cleaning_posters": "Nettoyage des affiches Plex",
+  "toast.suffix_done": "terminé",
+  "toast.suffix_error": "erreur",
+
+  "confirm.full_rebuild": "Démarrer une reconstruction complète ? Cela réinterroge chaque titre et prend nettement plus de temps qu'une mise à jour normale.",
+  "confirm.cleanup_posters": "Supprimer les anciennes versions d'affiches envoyées par nos soins dans toute la bibliothèque Plex ?\n\nLes affiches actuellement sélectionnées restent intactes - seules les anciennes versions inutilisées sont supprimées. Les affiches originales de TMDb & co. ne sont pas touchées.",
+
+  "alert.missing_originals": "Attention : aucune affiche originale TMDb trouvée dans Plex pour : {titles} - l'affiche actuelle a été utilisée comme base (badge en double possible). Solution : lancez 'Actualiser les métadonnées' dans Plex, puis synchronisez à nouveau.",
+
+  "score_sync.cooldown": "Synchronisation des scores ignorée (délai d'attente, encore {seconds}s).",
+  "score_sync.done": "Synchronisation des scores : {processed} nouveaux titres, {total} au total dans le cache.",
+
+  "sync.demo_mode": "Mode démo : aucun Plex configuré.",
+  "sync.poster_fetch_error": "Erreur lors de la récupération de l'affiche originale ({title}) : {error}",
+  "sync.posters_fetched": "Affiches originales : {count} nouvellement récupérées.",
+  "sync.missing_originals_warning": "Attention : aucune affiche originale TMDb trouvée dans Plex pour : {titles} - l'affiche actuelle a été utilisée comme base (badge en double possible). Solution : lancez 'Actualiser les métadonnées' dans Plex, puis synchronisez à nouveau.",
+  "sync.render_error": "Erreur lors du rendu ({title}) : {error}",
+  "sync.rendered_count": "Affiches avec badge générées : {count}.",
+  "sync.orphans_removed": "Orphelins supprimés : {count} fichier(s) pour des titres qui n'existent plus.",
+  "sync.nothing_new": "Synchronisé : rien de nouveau.",
+
+  "push.demo_mode": "Mode démo : aucun Plex vers lequel envoyer.",
+  "push.nothing_to_push": "Rien à envoyer.",
+  "push.error": "Erreur lors de l'envoi ({title}) : {error}",
+  "push.ok": "OK : {title}",
+
+  "render.missing_original": "Aucune affiche originale pour '{title}' dans le cache - synchronisez d'abord.",
+
+  "rebuild_cache.cooldown_error": "Merci de patienter un instant : prochaine récupération du sitemap possible dans {seconds}s (le délai d'attente protège isitwokeornot.com contre les requêtes trop fréquentes).",
+  "rebuild_cache.loading": "Chargement du sitemap...",
+  "rebuild_cache.done": "Terminé : {processed} titres traités, {total} au total dans le cache.",
+
+  "api.sync_library.demo_error": "Mode démo : aucune bibliothèque Plex à synchroniser.",
+  "api.apply.demo_error": "Mode démo : définissez PLEX_URL/PLEX_TOKEN comme variables d'environnement pour réellement envoyer.",
+  "api.cleanup.demo_error": "Mode démo : aucune bibliothèque Plex à nettoyer.",
+
+  "cleanup.item_error": "Erreur pour {title} : {error}",
+  "cleanup.done": "Terminé : {count} anciennes versions d'affiches supprimées dans Plex."
+}

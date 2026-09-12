@@ -1,0 +1,70 @@
+{
+  "topbar.demo_flag": "Demo mode – Plex not configured",
+  "topbar.btn_rebuild.label": "Update Score Database",
+  "topbar.btn_rebuild.title": "Stage 1: refresh scores from isitwokeornot.com (incremental)",
+  "topbar.btn_sync_library.label": "Sync Now",
+  "topbar.btn_sync_library.title": "Stage 2: compare with Plex, fetch original posters, and render the badge locally (without uploading)",
+  "topbar.btn_apply_all.label": "Push to Plex",
+  "topbar.btn_apply_all.title": "Stage 3: upload rendered posters to Plex",
+  "topbar.btn_rebuild_full.label": "Full Rebuild",
+  "topbar.btn_rebuild_full.title": "Re-fetches every title (takes noticeably longer)",
+  "topbar.btn_cleanup_posters.label": "Delete Old Posters in Plex",
+  "topbar.btn_cleanup_posters.title": "Deletes old, self-uploaded poster versions in Plex (poster history) that accumulate over time",
+
+  "filter.all": "All",
+  "filter.red": "Red",
+  "filter.yellow": "Yellow",
+  "filter.green": "Green",
+
+  "empty_state": "No titles with a woke score found. Click \"Sync Now\" or check PLEX_URL/PLEX_TOKEN.",
+
+  "footer.source_prefix": "Score data from",
+  "footer.disclaimer": "not an official tool of isitwokeornot.com, Plex Inc., or TMDb",
+
+  "card.push": "Push",
+  "card.push_done": "Done",
+  "card.loading": "...",
+  "card.source_title": "Source: isitwokeornot.com",
+
+  "toast.uploading_posters": "Uploading posters",
+  "toast.building_cache": "Building cache",
+  "toast.syncing_with_plex": "Syncing with Plex",
+  "toast.cleaning_posters": "Cleaning up Plex posters",
+  "toast.suffix_done": "done",
+  "toast.suffix_error": "error",
+
+  "confirm.full_rebuild": "Start a full rebuild? This re-fetches every title and takes noticeably longer than a normal update.",
+  "confirm.cleanup_posters": "Delete old, self-uploaded poster versions across the entire Plex library?\n\nThe currently selected posters are left untouched - only unused older versions are removed. Original posters from TMDb & co. are not touched.",
+
+  "alert.missing_originals": "Warning: no TMDb original found in Plex for: {titles} - the current poster was used as a base (possible double badge). Fix: run 'Refresh Metadata' in Plex, then sync again.",
+
+  "score_sync.cooldown": "Score sync skipped (cooldown, {seconds}s left).",
+  "score_sync.done": "Score sync: {processed} new titles, {total} total in cache.",
+
+  "sync.demo_mode": "Demo mode: no Plex configured.",
+  "sync.poster_fetch_error": "Error fetching original poster ({title}): {error}",
+  "sync.posters_fetched": "Original posters: {count} newly fetched.",
+  "sync.missing_originals_warning": "Warning: no TMDb original found in Plex for: {titles} - the current poster was used as a base (possible double badge). Fix: run 'Refresh Metadata' in Plex, then sync again.",
+  "sync.render_error": "Error rendering ({title}): {error}",
+  "sync.rendered_count": "Branded posters rendered: {count}.",
+  "sync.orphans_removed": "Orphans removed: {count} file(s) for titles no longer present.",
+  "sync.nothing_new": "Synced: nothing new.",
+
+  "push.demo_mode": "Demo mode: no Plex to push to.",
+  "push.nothing_to_push": "Nothing to push.",
+  "push.error": "Error pushing ({title}): {error}",
+  "push.ok": "OK: {title}",
+
+  "render.missing_original": "No original poster for '{title}' in cache - sync first.",
+
+  "rebuild_cache.cooldown_error": "Please wait a moment: next sitemap fetch possible in {seconds}s (cooldown protects isitwokeornot.com from too-frequent requests).",
+  "rebuild_cache.loading": "Loading sitemap...",
+  "rebuild_cache.done": "Done: {processed} titles processed, {total} total in cache.",
+
+  "api.sync_library.demo_error": "Demo mode: no Plex library to sync with.",
+  "api.apply.demo_error": "Demo mode: set PLEX_URL/PLEX_TOKEN as environment variables to actually push.",
+  "api.cleanup.demo_error": "Demo mode: no Plex library to clean up.",
+
+  "cleanup.item_error": "Error for {title}: {error}",
+  "cleanup.done": "Done: {count} old poster versions removed in Plex."
+}

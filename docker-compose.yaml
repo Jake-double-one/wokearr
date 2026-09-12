@@ -18,6 +18,7 @@ services:
       PLEX_URL: "${PLEX_URL:-}"
       PLEX_TOKEN: "${PLEX_TOKEN:-}"
       LIBRARY_SECTIONS: "${LIBRARY_SECTIONS:-Filme,Serien}"
+      LANGUAGE: "${LANGUAGE:-en-US}"
       BADGE_POSITION: "${BADGE_POSITION:-top-right}"
       BADGE_LABEL_STYLE: "${BADGE_LABEL_STYLE:-percent}"
       BADGE_WIDTH_PERCENT: "${BADGE_WIDTH_PERCENT:-20}"

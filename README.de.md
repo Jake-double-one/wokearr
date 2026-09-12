@@ -57,7 +57,7 @@ ausprobieren könnt.
 4. **Deploy the stack**.
 
 Für ein Update auf eine neue [Release](https://github.com/Jake-double-one/wokearr/releases)
-reicht in Portainer **Stacks -> woke-score -> Pull and redeploy** (zieht das
+reicht in Portainer **Stacks -> wokearr -> Pull and redeploy** (zieht das
 `:latest`-Image neu). Wer eine Version fest pinnen will, ändert den Tag in
 `image:` z. B. auf `:v0.1.0`.
 

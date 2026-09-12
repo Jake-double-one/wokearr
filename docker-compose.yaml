@@ -1,7 +1,7 @@
 version: "3.8"
 
 services:
-  woke-score:
+  wokearr:
     # Ready-built image from the GitHub Action (.github/workflows/docker-publish.yml).
     # Use a pinned version instead of "latest", e.g. ":v0.1.0".
     image: ghcr.io/jake-double-one/wokearr:latest
@@ -10,7 +10,7 @@ services:
     # build:
     #   context: .
     #   dockerfile: Dockerfile
-    container_name: woke-score
+    container_name: wokearr
     restart: unless-stopped
     ports:
       - "5005:5005"

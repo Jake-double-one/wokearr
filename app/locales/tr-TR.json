@@ -1,0 +1,70 @@
+{
+  "topbar.demo_flag": "Demo modu – Plex yapılandırılmadı",
+  "topbar.btn_rebuild.label": "Puan Veritabanını Güncelle",
+  "topbar.btn_rebuild.title": "Aşama 1: isitwokeornot.com'dan puanları güncelle (artımlı)",
+  "topbar.btn_sync_library.label": "Şimdi Senkronize Et",
+  "topbar.btn_sync_library.title": "Aşama 2: Plex ile karşılaştır, orijinal posterleri al ve rozeti yerel olarak oluştur (yüklemeden)",
+  "topbar.btn_apply_all.label": "Plex'e Gönder",
+  "topbar.btn_apply_all.title": "Aşama 3: oluşturulan posterleri Plex'e yükle",
+  "topbar.btn_rebuild_full.label": "Tam Yeniden Oluşturma",
+  "topbar.btn_rebuild_full.title": "Her başlığı yeniden sorgular (belirgin şekilde daha uzun sürer)",
+  "topbar.btn_cleanup_posters.label": "Plex'teki Eski Posterleri Sil",
+  "topbar.btn_cleanup_posters.title": "Zamanla biriken, kendi yüklediğimiz eski poster sürümlerini Plex'ten siler (poster geçmişi)",
+
+  "filter.all": "Tümü",
+  "filter.red": "Kırmızı",
+  "filter.yellow": "Sarı",
+  "filter.green": "Yeşil",
+
+  "empty_state": "Woke puanına sahip başlık bulunamadı. \"Şimdi Senkronize Et\" düğmesine tıklayın veya PLEX_URL/PLEX_TOKEN değerlerini kontrol edin.",
+
+  "footer.source_prefix": "Puan verileri kaynağı:",
+  "footer.disclaimer": "isitwokeornot.com, Plex Inc. veya TMDb'nin resmi bir aracı değildir",
+
+  "card.push": "Gönder",
+  "card.push_done": "Tamamlandı",
+  "card.loading": "...",
+  "card.source_title": "Kaynak: isitwokeornot.com",
+
+  "toast.uploading_posters": "Posterler yükleniyor",
+  "toast.building_cache": "Önbellek oluşturuluyor",
+  "toast.syncing_with_plex": "Plex ile senkronize ediliyor",
+  "toast.cleaning_posters": "Plex posterleri temizleniyor",
+  "toast.suffix_done": "tamamlandı",
+  "toast.suffix_error": "hata",
+
+  "confirm.full_rebuild": "Tam yeniden oluşturma başlatılsın mı? Bu, her başlığı yeniden sorgular ve normal bir güncellemeden belirgin şekilde daha uzun sürer.",
+  "confirm.cleanup_posters": "Tüm Plex kitaplığındaki kendi yüklediğimiz eski poster sürümleri silinsin mi?\n\nŞu anda seçili olan posterlere dokunulmaz - yalnızca kullanılmayan eski sürümler kaldırılır. TMDb ve diğer kaynaklardan gelen orijinal posterlere dokunulmaz.",
+
+  "alert.missing_originals": "Uyarı: şunlar için Plex'te orijinal TMDb posteri bulunamadı: {titles} - mevcut poster temel olarak kullanıldı (çift rozet olasılığı). Çözüm: Plex'te 'Meta Verileri Yenile' işlemini çalıştırın, ardından tekrar senkronize edin.",
+
+  "score_sync.cooldown": "Puan senkronizasyonu atlandı (bekleme süresi, {seconds}sn kaldı).",
+  "score_sync.done": "Puan senkronizasyonu: {processed} yeni başlık, önbellekte toplam {total}.",
+
+  "sync.demo_mode": "Demo modu: Plex yapılandırılmadı.",
+  "sync.poster_fetch_error": "Orijinal poster alınırken hata oluştu ({title}): {error}",
+  "sync.posters_fetched": "Orijinal posterler: {count} tanesi yeni alındı.",
+  "sync.missing_originals_warning": "Uyarı: şunlar için Plex'te orijinal TMDb posteri bulunamadı: {titles} - mevcut poster temel olarak kullanıldı (çift rozet olasılığı). Çözüm: Plex'te 'Meta Verileri Yenile' işlemini çalıştırın, ardından tekrar senkronize edin.",
+  "sync.render_error": "Oluşturma sırasında hata ({title}): {error}",
+  "sync.rendered_count": "Rozetli posterler oluşturuldu: {count}.",
+  "sync.orphans_removed": "Artık mevcut olmayan başlıklar için {count} dosya kaldırıldı.",
+  "sync.nothing_new": "Senkronize edildi: yeni bir şey yok.",
+
+  "push.demo_mode": "Demo modu: gönderilecek Plex yok.",
+  "push.nothing_to_push": "Gönderilecek bir şey yok.",
+  "push.error": "Gönderirken hata oluştu ({title}): {error}",
+  "push.ok": "Tamam: {title}",
+
+  "render.missing_original": "Önbellekte '{title}' için orijinal poster yok - önce senkronize edin.",
+
+  "rebuild_cache.cooldown_error": "Lütfen biraz bekleyin: bir sonraki site haritası alma işlemi {seconds}sn sonra mümkün olacak (bekleme süresi isitwokeornot.com'u çok sık isteklerden korur).",
+  "rebuild_cache.loading": "Site haritası yükleniyor...",
+  "rebuild_cache.done": "Tamamlandı: {processed} başlık işlendi, önbellekte toplam {total}.",
+
+  "api.sync_library.demo_error": "Demo modu: senkronize edilecek Plex kitaplığı yok.",
+  "api.apply.demo_error": "Demo modu: gerçekten göndermek için PLEX_URL/PLEX_TOKEN'ı ortam değişkeni olarak ayarlayın.",
+  "api.cleanup.demo_error": "Demo modu: temizlenecek Plex kitaplığı yok.",
+
+  "cleanup.item_error": "{title} için hata: {error}",
+  "cleanup.done": "Tamamlandı: Plex'te {count} eski poster sürümü kaldırıldı."
+}

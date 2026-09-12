@@ -57,7 +57,7 @@ Without a valid `PLEX_URL`/`PLEX_TOKEN`, the app automatically starts in
 4. **Deploy the stack**.
 
 To update to a new [release](https://github.com/Jake-double-one/wokearr/releases),
-just use **Stacks -> woke-score -> Pull and redeploy** in Portainer (pulls the
+just use **Stacks -> wokearr -> Pull and redeploy** in Portainer (pulls the
 `:latest` image again). To pin a specific version, change the tag in `image:`,
 e.g. to `:v0.1.0`.
 

@@ -6,6 +6,7 @@ on Plex posters, score source: isitwokeornot.com
 Configuration is done entirely via environment variables (see .env.example),
 so the image can be published to GitHub/Docker Hub without any code changes.
 """
+import datetime
 import io
 import json
 import os
@@ -18,6 +19,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 import requests
+from croniter import croniter
 from flask import Flask, jsonify, request, send_file, render_template
 from PIL import Image
 
@@ -92,12 +94,20 @@ CLEANUP_OLD_POSTERS = os.environ.get("CLEANUP_OLD_POSTERS", "true").strip().lowe
 # build instead of processing one title after another.
 POSTER_WORKERS = 4
 
-# Autopilot interval (minutes): score sync, maintain the original-poster
-# cache, clean up removed titles, AND automatically badge and upload
-# new/changed titles to Plex - all in one cadence. 0 = disabled (default),
-# then only via the buttons in the UI. For a true "runs on its own" setup,
-# e.g. set to 60. Replaces the earlier CACHE_AUTO_REFRESH_MINUTES (scores only).
-AUTO_SYNC_INTERVAL_MINUTES = int(os.environ.get("AUTO_SYNC_INTERVAL_MINUTES", "0") or "0")
+# Autopilot schedule as a standard 5-field cron expression: score sync,
+# maintain the original-poster cache, clean up removed titles, AND
+# automatically badge and upload new/changed titles to Plex - all in one
+# cadence, at whatever times the expression fires. Empty or "0" = disabled
+# (default), then only via the buttons in the UI. E.g. "0 * * * *" for
+# hourly, "0 3 * * *" for daily at 3 AM. Replaces the earlier
+# AUTO_SYNC_INTERVAL_MINUTES (fixed-minute interval since container start).
+AUTO_SYNC_CRON = os.environ.get("AUTO_SYNC_CRON", "").strip()
+if AUTO_SYNC_CRON in ("", "0"):
+    AUTO_SYNC_CRON = None
+elif not croniter.is_valid(AUTO_SYNC_CRON):
+    print(f"[auto-sync] Invalid AUTO_SYNC_CRON={AUTO_SYNC_CRON!r} (not a valid 5-field cron "
+          f"expression) - autopilot disabled.", flush=True)
+    AUTO_SYNC_CRON = None
 # Minimum gap between two sitemap fetches (manual or automatic), so
 # isitwokeornot.com isn't overloaded by spam clicks or a too-tight cron
 # schedule.
@@ -626,16 +636,19 @@ def _reserve_rebuild_slot() -> float:
 
 
 def _auto_sync_loop():
-    interval = AUTO_SYNC_INTERVAL_MINUTES * 60
     while True:
-        time.sleep(interval)
+        now = datetime.datetime.now()
+        next_run = croniter(AUTO_SYNC_CRON, now).get_next(datetime.datetime)
+        sleep_seconds = (next_run - now).total_seconds()
+        if sleep_seconds > 0:
+            time.sleep(sleep_seconds)
         try:
             autonomous_sync()
         except Exception as e:
             print(f"[auto-sync] Unexpected error: {e}", flush=True)
 
 
-if AUTO_SYNC_INTERVAL_MINUTES > 0:
+if AUTO_SYNC_CRON:
     threading.Thread(target=_auto_sync_loop, daemon=True).start()
 
 

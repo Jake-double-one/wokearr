@@ -17,10 +17,10 @@ on the score from [isitwokeornot.com](https://isitwokeornot.com/).
   uploaded to Plex as a new poster - rendering and uploading are two separate
   steps, each with its own local file (`originals/`, `branded/`), so you can
   check the burned-in result before it's pushed to Plex
-- **Autopilot:** once `AUTO_SYNC_INTERVAL_MINUTES` is set, everything runs on
-  its own - new titles automatically get their score, their original poster,
-  their rendered badge, and get uploaded to Plex; removed titles get cleaned
-  up (see [Autopilot](#autopilot---automatic-operation))
+- **Autopilot:** once `AUTO_SYNC_CRON` is set to a cron schedule, everything
+  runs on its own - new titles automatically get their score, their original
+  poster, their rendered badge, and get uploaded to Plex; removed titles get
+  cleaned up (see [Autopilot](#autopilot---automatic-operation))
 
 ## Screenshot
 
@@ -76,7 +76,7 @@ e.g. to `:v0.1.0`.
 | `BADGE_POSITION`    | no    | `top-right`     | `top-right` \| `top-left` \| `bottom-right` \| `bottom-left` |
 | `BADGE_LABEL_STYLE` | no    | `percent`       | `percent` (`37%`) \| `woke` (`37% woke`) |
 | `BADGE_WIDTH_PERCENT` | no  | `20`            | Badge width relative to poster width, in percent. Hard-floored at `20` (lower values are automatically raised) |
-| `AUTO_SYNC_INTERVAL_MINUTES` | no | `0` (off) | Interval in minutes for the full autopilot run (score sync, poster cache, cleanup, auto-push). `60` for hourly. |
+| `AUTO_SYNC_CRON` | no | empty (off) | 5-field cron expression for the full autopilot run (score sync, poster cache, cleanup, auto-push). Empty or `0` disables it. E.g. `0 * * * *` for hourly. |
 | `CACHE_REBUILD_COOLDOWN_MINUTES` | no | `5` | Minimum gap between two sitemap fetches (manual or automatic) |
 | `CLEANUP_OLD_POSTERS` | no | `true` | After every push, automatically delete older, self-uploaded poster versions in Plex (see below) |
 
@@ -115,10 +115,11 @@ last rendered and last uploaded to Plex).
 
 ## Autopilot - automatic operation
 
-Set `AUTO_SYNC_INTERVAL_MINUTES` to an interval > 0 (e.g. `60` for hourly) and
-Wokearr runs entirely on its own, without you needing to touch the UI. Every
-run performs the same three stages in sequence, which can also be triggered
-individually via the buttons below:
+Set `AUTO_SYNC_CRON` to a cron schedule (e.g. `0 * * * *` for hourly, see
+[crontab.guru](https://crontab.guru/) to build one) and Wokearr runs entirely
+on its own, without you needing to touch the UI. Every run performs the same
+three stages in sequence, which can also be triggered individually via the
+buttons below:
 
 1. **Update Score Database** - pulls new/missing titles from
    isitwokeornot.com (incremental).
@@ -143,8 +144,8 @@ early simply skips this stage and continues with the rest.
 ## Manual operation
 
 Not needed for normal operation with the autopilot active, but meant for
-anyone who deliberately turns off the autopilot (`AUTO_SYNC_INTERVAL_MINUTES=0`,
-the default) and wants to trigger each stage themselves:
+anyone who deliberately turns off the autopilot (`AUTO_SYNC_CRON` empty, the
+default) and wants to trigger each stage themselves:
 
 - **Update Score Database** - stage 1 only, incremental.
 - **Sync Now** - stage 2 only (Plex comparison, maintain original and branded

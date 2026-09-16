@@ -17,10 +17,11 @@ auf dem Score von [isitwokeornot.com](https://isitwokeornot.com/).
   neues Poster in Plex hochgeladen - Rendern und Hochladen sind zwei getrennte
   Schritte mit je einer eigenen lokalen Datei (`originals/`, `branded/`), so
   lässt sich das gebrannte Ergebnis vor dem Push in Plex ansehen
-- **Autopilot:** einmal `AUTO_SYNC_INTERVAL_MINUTES` gesetzt, läuft alles von
-  selbst - neue Titel bekommen automatisch ihren Score, ihr Original-Poster,
-  ihren gerenderten Badge und werden nach Plex hochgeladen, entfernte Titel
-  werden aufgeräumt (siehe [Autopilot](#autopilot---automatischer-betrieb))
+- **Autopilot:** einmal `AUTO_SYNC_CRON` mit einem Cron-Zeitplan gesetzt,
+  läuft alles von selbst - neue Titel bekommen automatisch ihren Score, ihr
+  Original-Poster, ihren gerenderten Badge und werden nach Plex hochgeladen,
+  entfernte Titel werden aufgeräumt (siehe
+  [Autopilot](#autopilot---automatischer-betrieb))
 
 ## Screenshot
 
@@ -76,7 +77,7 @@ reicht in Portainer **Stacks -> wokearr -> Pull and redeploy** (zieht das
 | `BADGE_POSITION`    | nein    | `top-right`     | `top-right` \| `top-left` \| `bottom-right` \| `bottom-left` |
 | `BADGE_LABEL_STYLE` | nein    | `percent`       | `percent` (`37%`) \| `woke` (`37% woke`) |
 | `BADGE_WIDTH_PERCENT` | nein  | `20`            | Breite der Badge relativ zur Posterbreite, in Prozent. Mindestwert fest bei `20` verankert (kleinere Werte werden automatisch angehoben) |
-| `AUTO_SYNC_INTERVAL_MINUTES` | nein | `0` (aus) | Intervall in Minuten für den kompletten Autopilot-Lauf (Score-Sync, Poster-Cache, aufräumen, automatisch anwenden). `60` für stündlich. |
+| `AUTO_SYNC_CRON` | nein | leer (aus) | Cron-Ausdruck (5 Felder) für den kompletten Autopilot-Lauf (Score-Sync, Poster-Cache, aufräumen, automatisch anwenden). Leer oder `0` deaktiviert. Z. B. `0 * * * *` für stündlich. |
 | `CACHE_REBUILD_COOLDOWN_MINUTES` | nein | `5` | Mindestabstand zwischen zwei Sitemap-Abrufen (manuell oder automatisch) |
 | `CLEANUP_OLD_POSTERS` | nein | `true` | Nach jedem Übertragen automatisch ältere, selbst hochgeladene Poster-Versionen in Plex löschen (siehe unten) |
 
@@ -116,10 +117,11 @@ welchem Score zuletzt gerendert bzw. zu Plex hochgeladen wurde).
 
 ## Autopilot - automatischer Betrieb
 
-`AUTO_SYNC_INTERVAL_MINUTES` auf ein Intervall > 0 setzen (z. B. `60` für
-stündlich) und Wokearr läuft komplett von selbst, ohne dass ihr die UI
-anfassen müsst. Jeder Durchlauf macht der Reihe nach dieselben drei Stufen,
-die unten auch einzeln per Button auslösbar sind:
+`AUTO_SYNC_CRON` auf einen Cron-Zeitplan setzen (z. B. `0 * * * *` für
+stündlich, Erstellung z. B. mit [crontab.guru](https://crontab.guru/)) und
+Wokearr läuft komplett von selbst, ohne dass ihr die UI anfassen müsst. Jeder
+Durchlauf macht der Reihe nach dieselben drei Stufen, die unten auch einzeln
+per Button auslösbar sind:
 
 1. **Score-Datenbank aktualisieren** – neue/fehlende Titel bei
    isitwokeornot.com nachziehen (inkrementell).
@@ -147,8 +149,8 @@ mit den restlichen weiter.
 ## Manuelle Bedienung
 
 Für den Normalbetrieb mit aktivem Autopiloten nicht nötig, aber gedacht für
-alle, die den Autopilot bewusst abschalten (`AUTO_SYNC_INTERVAL_MINUTES=0`,
-Standard) und jede Stufe selbst antriggern wollen:
+alle, die den Autopilot bewusst abschalten (`AUTO_SYNC_CRON` leer, Standard)
+und jede Stufe selbst antriggern wollen:
 
 - **Score-Datenbank aktualisieren** – nur Stufe 1, inkrementell.
 - **Jetzt synchronisieren** – nur Stufe 2 (Plex-Abgleich, Original- und

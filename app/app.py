@@ -282,23 +282,23 @@ def cleanup_old_uploaded_posters(plex, item) -> int:
     try:
         candidates = list(item.posters())
     except Exception as e:
-        print(f"[cleanup] {item.title}: item.posters() failed: {e}", flush=True)
+        print(f"[cleanup] {_display_title(item)}: item.posters() failed: {e}", flush=True)
         return 0
 
     for p in candidates:
         key = getattr(p, "key", "?")
         if getattr(p, "selected", False):
-            print(f"[cleanup] {item.title}: skipped (currently selected) - {key}", flush=True)
+            print(f"[cleanup] {_display_title(item)}: skipped (currently selected) - {key}", flush=True)
             continue
         if not _is_upload_poster(p):
-            print(f"[cleanup] {item.title}: skipped (agent poster) - {key}", flush=True)
+            print(f"[cleanup] {_display_title(item)}: skipped (agent poster) - {key}", flush=True)
             continue
         try:
             p.delete()
             removed += 1
-            print(f"[cleanup] {item.title}: deleted - {key}", flush=True)
+            print(f"[cleanup] {_display_title(item)}: deleted - {key}", flush=True)
         except Exception as e:
-            print(f"[cleanup] {item.title}: delete failed ({e}) - {key}", flush=True)
+            print(f"[cleanup] {_display_title(item)}: delete failed ({e}) - {key}", flush=True)
     return removed
 
 
@@ -338,7 +338,7 @@ def render_branded_image(item, entry: dict, force: bool = False) -> Path:
 
     original_path = ORIGINALS_DIR / f"{rk}.jpg"
     if not original_path.exists():
-        raise FileNotFoundError(t("render.missing_original", title=item.title))
+        raise FileNotFoundError(t("render.missing_original", title=_display_title(item)))
 
     add_badge(
         str(original_path),
@@ -364,7 +364,7 @@ def push_to_plex(plex, item, entry: dict, force: bool = False) -> str:
     if CLEANUP_OLD_POSTERS:
         cleanup_old_uploaded_posters(plex, item)
     _record_state(PUSHED_STATE_FILE, item.ratingKey, entry["score"])
-    return t("push.ok", title=item.title)
+    return t("push.ok", title=_display_title(item))
 
 
 def _current_library_items(plex) -> dict:
@@ -382,6 +382,29 @@ def _current_library_items(plex) -> dict:
         for it in section.all():
             items[str(it.ratingKey)] = (it, prefix)
     return items
+
+
+def _seasons_for_show(item) -> list:
+    """
+    Returns all Plex season objects of a show (best-effort - an error here
+    must never abort processing of the show itself, just skip its seasons
+    for this cycle). Seasons have their own distinct poster in Plex (usually
+    agent-provided, e.g. from TheTVDB) but no TMDb ID of their own, so they
+    can't be matched against the score cache independently - callers badge
+    them with the same score as their parent show instead.
+    """
+    try:
+        return list(item.seasons())
+    except Exception as e:
+        print(f"[seasons] {item.title}: item.seasons() failed: {e}", flush=True)
+        return []
+
+
+def _display_title(item) -> str:
+    """'<Show> – <Season>' for a season (parentTitle is already loaded with
+    the season, no extra Plex request), otherwise just the item's own title."""
+    parent_title = getattr(item, "parentTitle", None)
+    return f"{parent_title} – {item.title}" if parent_title else item.title
 
 
 def _emit(log, msg, prefix="sync"):
@@ -431,12 +454,23 @@ def sync_library(log=None) -> list[str]:
     library = _current_library_items(plex)
     valid_keys = set(library.keys())
 
+    # Shows only carry one score for the whole series, but each season has
+    # its own distinct poster in Plex - badge every season with its show's
+    # score too, so browsing into a show doesn't hit unbadged season tiles.
+    # Seasons have no TMDb ID of their own, so they piggyback on their
+    # show's match instead of being looked up independently.
     titled_entries = []
     for rk, (item, prefix) in library.items():
         tmdb_id = tmdb_id_from_item(item)
         entry = cache.get(f"{prefix}:{tmdb_id}") if tmdb_id else None
-        if entry:
-            titled_entries.append((rk, item, entry))
+        if not entry:
+            continue
+        titled_entries.append((rk, item, entry))
+        if prefix == "tv":
+            for season in _seasons_for_show(item):
+                season_rk = str(season.ratingKey)
+                valid_keys.add(season_rk)
+                titled_entries.append((season_rk, season, entry))
 
     # Fetch original posters where none is cached yet
     to_warm = [(item, entry) for rk, item, entry in titled_entries if not (ORIGINALS_DIR / f"{rk}.jpg").exists()]
@@ -449,9 +483,9 @@ def sync_library(log=None) -> list[str]:
                 try:
                     _, found = f.result()
                     if not found:
-                        warnings.append(item.title)
+                        warnings.append(_display_title(item))
                 except Exception as e:
-                    _emit(log, t("sync.poster_fetch_error", title=item.title, error=e))
+                    _emit(log, t("sync.poster_fetch_error", title=_display_title(item), error=e))
         _emit(log, t("sync.posters_fetched", count=len(to_warm)))
     if warnings:
         _emit(log, t("sync.missing_originals_warning", titles=", ".join(warnings)))
@@ -468,7 +502,7 @@ def sync_library(log=None) -> list[str]:
             render_branded_image(item, entry)
             rendered += 1
         except Exception as e:
-            _emit(log, t("sync.render_error", title=item.title, error=e))
+            _emit(log, t("sync.render_error", title=_display_title(item), error=e))
     if rendered:
         _emit(log, t("sync.rendered_count", count=rendered))
 
@@ -524,6 +558,14 @@ def push_pending_to_plex(log=None, progress=None, force: bool = False, rating_ke
             continue
         if force or pushed_state.get(rk) != entry["score"]:
             to_push.append((item, entry))
+        # Push the show's seasons along with it - same score, own poster
+        # (see _seasons_for_show). Applies whether pushing the whole library
+        # or just this one show via rating_keys.
+        if prefix == "tv":
+            for season in _seasons_for_show(item):
+                season_rk = str(season.ratingKey)
+                if force or pushed_state.get(season_rk) != entry["score"]:
+                    to_push.append((season, entry))
 
     if not to_push:
         _emit(log, t("push.nothing_to_push"))
@@ -539,7 +581,7 @@ def push_pending_to_plex(log=None, progress=None, force: bool = False, rating_ke
         try:
             _emit(log, push_to_plex(plex, item, entry, force))
         except Exception as e:
-            _emit(log, t("push.error", title=item.title, error=e))
+            _emit(log, t("push.error", title=_display_title(item), error=e))
         finally:
             if progress:
                 with progress_lock:
@@ -788,9 +830,13 @@ def api_cleanup_posters():
             items = []
             for section_name in LIBRARY_SECTIONS:
                 try:
-                    items.extend(plex.library.section(section_name).all())
+                    section_items = plex.library.section(section_name).all()
                 except Exception:
                     continue
+                items.extend(section_items)
+                for it in section_items:
+                    if getattr(it, "type", None) == "show":
+                        items.extend(_seasons_for_show(it))
             JOBS[job_id]["progress"] = [0, len(items)]
 
             progress_lock = threading.Lock()
@@ -803,7 +849,7 @@ def api_cleanup_posters():
                     removed = cleanup_old_uploaded_posters(plex, item)
                 except Exception as e:
                     removed = 0
-                    JOBS[job_id]["log"].append(t("cleanup.item_error", title=getattr(item, "title", "?"), error=e))
+                    JOBS[job_id]["log"].append(t("cleanup.item_error", title=_display_title(item) if hasattr(item, "title") else "?", error=e))
                 with progress_lock:
                     done += 1
                     removed_total += removed

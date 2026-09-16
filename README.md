@@ -9,6 +9,10 @@ on the score from [isitwokeornot.com](https://isitwokeornot.com/).
 - **Red** = high score (warning), **Yellow** = medium, **Green** = low
 - Matching runs on the TMDb ID that both Plex and isitwokeornot.com keep per
   title
+- For shows, every season gets badged too (with the show's score, on that
+  season's own poster) - not just the show itself, so browsing into a show
+  doesn't hit unbadged season tiles. Individual episode thumbnails are left
+  alone
 - The original poster stays the base; the badge is only rendered on top and
   uploaded to Plex as a new poster - rendering and uploading are two separate
   steps, each with its own local file (`originals/`, `branded/`), so you can

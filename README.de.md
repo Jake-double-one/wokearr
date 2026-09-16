@@ -9,6 +9,10 @@ auf dem Score von [isitwokeornot.com](https://isitwokeornot.com/).
 - **Rot** = hoher Score (Warnung), **Gelb** = mittel, **Grün** = niedrig
 - Matching läuft über die TMDb-ID, die sowohl Plex als auch isitwokeornot.com
   pro Titel führen
+- Bei Serien wird auch jede Staffel gebadged (mit dem Score der Serie, auf dem
+  eigenen Staffel-Poster) - nicht nur die Serie selbst, damit beim Reinklicken
+  in eine Serie keine unbebadgten Staffel-Kacheln auftauchen. Einzelne
+  Episoden-Thumbnails bleiben unangetastet
 - Original-Poster bleibt Basis, die Badge wird nur oben drauf gerendert und als
   neues Poster in Plex hochgeladen - Rendern und Hochladen sind zwei getrennte
   Schritte mit je einer eigenen lokalen Datei (`originals/`, `branded/`), so

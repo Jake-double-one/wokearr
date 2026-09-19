@@ -1,6 +1,9 @@
 """
-Draws a traffic-light badge (circle with percentage) onto a poster.
-Red = high woke score (warning), yellow = medium, green = low.
+Draws a woke-score badge (circle with percentage) onto a poster.
+
+Five bands, matching the official ones from isitwokeornot.com:
+0-19 not woke, 20-39 slightly woke, 40-59 woke, 60-79 very woke,
+80-100 super woke.
 """
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
@@ -10,14 +13,33 @@ FONT_CANDIDATES = [
     "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",            # Alpine (font-dejavu)
 ]
 
-# Thresholds (score in percent, 0-100)
-THRESH_GREEN_MAX = 33   # 0-33  -> green
-THRESH_YELLOW_MAX = 66  # 34-66 -> yellow
-                        # 67-100 -> red
+# Upper bound (inclusive) of each band, in the order of BAND_KEYS. The bands
+# themselves are the source's own classification, not a free-form setting -
+# only the colors are configurable (see COLOR_SCHEMES).
+BAND_KEYS = ("not_woke", "slightly_woke", "woke", "very_woke", "super_woke")
+BAND_MAX = (19, 39, 59, 79, 100)
 
-COLOR_GREEN  = (46, 160, 67)
-COLOR_YELLOW = (240, 173, 13)
-COLOR_RED    = (215, 45, 32)
+# "standard" mirrors the colors isitwokeornot.com uses themselves (Tailwind
+# green-500 / lime-600 / amber-500 / orange-500 / rose-500); "modified" is the
+# alternative green -> yellow -> orange -> red -> violet ramp.
+COLOR_SCHEMES = {
+    "standard": {
+        "not_woke":      (0x22, 0xC5, 0x5E),
+        "slightly_woke": (0x65, 0xA3, 0x0D),
+        "woke":          (0xF5, 0x9E, 0x0B),
+        "very_woke":     (0xF9, 0x73, 0x16),
+        "super_woke":    (0xF4, 0x3F, 0x5E),
+    },
+    "modified": {
+        "not_woke":      (0x22, 0xC5, 0x5E),
+        "slightly_woke": (0xEA, 0xB3, 0x08),
+        "woke":          (0xF9, 0x73, 0x16),
+        "very_woke":     (0xEF, 0x44, 0x44),
+        "super_woke":    (0x8B, 0x5C, 0xF6),
+    },
+}
+DEFAULT_COLOR_SCHEME = "standard"
+
 COLOR_WHITE  = (255, 255, 255)
 COLOR_SHADOW = (0, 0, 0, 140)
 
@@ -28,12 +50,17 @@ COLOR_SHADOW = (0, 0, 0, 140)
 BADGE_MARKER = b"wokearr-badge"
 
 
-def score_color(score: int):
-    if score <= THRESH_GREEN_MAX:
-        return COLOR_GREEN
-    if score <= THRESH_YELLOW_MAX:
-        return COLOR_YELLOW
-    return COLOR_RED
+def score_band(score: int) -> str:
+    """Band key for a score, e.g. 73 -> "very_woke"."""
+    for key, upper in zip(BAND_KEYS, BAND_MAX):
+        if score <= upper:
+            return key
+    return BAND_KEYS[-1]
+
+
+def score_color(score: int, color_scheme: str = DEFAULT_COLOR_SCHEME):
+    scheme = COLOR_SCHEMES.get(color_scheme) or COLOR_SCHEMES[DEFAULT_COLOR_SCHEME]
+    return scheme[score_band(score)]
 
 
 def _load_font(size: int):
@@ -73,15 +100,17 @@ def add_badge(
     position: str = "top-right",
     label_style: str = "percent",
     width_percent: float = 20.0,
+    color_scheme: str = DEFAULT_COLOR_SCHEME,
 ):
     """width_percent controls the badge's size relative to the poster width
     (e.g. 20.0 = 20%). For the circle style ("percent") it applies directly
     to the diameter; for the pill style ("woke") proportionally to the font
-    size, so both variants scale consistently with the same knob."""
+    size, so both variants scale consistently with the same knob.
+    color_scheme picks the band colors (see COLOR_SCHEMES)."""
     img = Image.open(poster_path).convert("RGBA")
     w, h = img.size
     margin = int(w * 0.035)
-    color = score_color(score)
+    color = score_color(score, color_scheme)
     size_fraction = width_percent / 100
 
     overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))

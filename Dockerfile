@@ -12,8 +12,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ .
 
+# Version/build stamp, filled by the GitHub Action (see docker-publish.yml).
+# Deliberately placed after COPY: these change on every build and would
+# otherwise invalidate the cached pip-install layer each time.
+ARG APP_VERSION=dev
+ARG BUILD_DATE=""
+
 ENV DATA_DIR=/data \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    APP_VERSION=${APP_VERSION} \
+    BUILD_DATE=${BUILD_DATE}
 VOLUME ["/data"]
 
 EXPOSE 5005

@@ -9,6 +9,7 @@ so the image can be published to GitHub/Docker Hub without any code changes.
 import datetime
 import io
 import json
+import re
 import os
 import sys
 import threading
@@ -23,7 +24,14 @@ from croniter import croniter
 from flask import Flask, jsonify, request, send_file, render_template
 from PIL import Image
 
-from badge import add_badge, BADGE_MARKER  # noqa: E402
+from badge import (  # noqa: E402
+    add_badge,
+    BADGE_MARKER,
+    BAND_KEYS,
+    BAND_MAX,
+    COLOR_SCHEMES,
+    DEFAULT_COLOR_SCHEME,
+)
 
 # ---------------------------------------------------------------------------
 # CONFIG - comes from environment variables (see .env.example / docker-compose.yaml)
@@ -44,6 +52,44 @@ try:
 except ValueError:
     BADGE_WIDTH_PERCENT = BADGE_WIDTH_MIN_PERCENT
 BADGE_WIDTH_PERCENT = max(BADGE_WIDTH_PERCENT, BADGE_WIDTH_MIN_PERCENT)
+
+# Color palette for the five score bands: "standard" mirrors the colors
+# isitwokeornot.com uses themselves, "modified" is the alternative
+# green -> yellow -> orange -> red -> violet ramp (see badge.COLOR_SCHEMES).
+BADGE_COLOR_SCHEME = os.environ.get("BADGE_COLOR_SCHEME", DEFAULT_COLOR_SCHEME).strip().lower()
+if BADGE_COLOR_SCHEME not in COLOR_SCHEMES:
+    print(f"[config] Unknown BADGE_COLOR_SCHEME={BADGE_COLOR_SCHEME!r}, falling back to "
+          f"{DEFAULT_COLOR_SCHEME!r}. Available: {', '.join(sorted(COLOR_SCHEMES))}.", flush=True)
+    BADGE_COLOR_SCHEME = DEFAULT_COLOR_SCHEME
+
+# Version/build info, injected as build args by the GitHub Action (see
+# Dockerfile). Outside of Docker these stay unset - shown as "dev" then.
+APP_VERSION = os.environ.get("APP_VERSION", "").strip() or "dev"
+BUILD_DATE = os.environ.get("BUILD_DATE", "").strip()
+
+# How long run-protocol entries are kept: "<number><unit>" with d(ays),
+# w(eeks) or m(onths, 30 days). "0" keeps everything (up to the hard cap).
+RUN_HISTORY_RETENTION_DEFAULT = "4w"
+_RETENTION_UNIT_DAYS = {"d": 1, "w": 7, "m": 30}
+
+
+def _parse_retention_days(raw: str) -> int:
+    """'3d'/'2w'/'6m' -> number of days. 0 means "keep everything"; anything
+    unparseable falls back to the default instead of dropping the protocol."""
+    value = (raw or "").strip().lower()
+    if value in ("", "0"):
+        return 0
+    match = re.fullmatch(r"(\d+)\s*([dwm])", value)
+    if not match:
+        print(f"[config] Unparseable RUN_HISTORY_RETENTION={raw!r}, using "
+              f"{RUN_HISTORY_RETENTION_DEFAULT!r}. Expected e.g. 3d, 2w, 6m.", flush=True)
+        return _parse_retention_days(RUN_HISTORY_RETENTION_DEFAULT)
+    return int(match.group(1)) * _RETENTION_UNIT_DAYS[match.group(2)]
+
+
+RUN_HISTORY_RETENTION_DAYS = _parse_retention_days(
+    os.environ.get("RUN_HISTORY_RETENTION", RUN_HISTORY_RETENTION_DEFAULT)
+)
 
 # UI language (template, JS toasts, job logs/error messages in the browser).
 # en-US is the default AND the fallback for individual missing keys in other
@@ -128,9 +174,15 @@ BRANDED_DIR = DATA_DIR / "branded"
 BRANDED_DIR.mkdir(parents=True, exist_ok=True)
 # Tracks, per ratingKey, which score was last rendered/uploaded to Plex - so
 # the autopilot recognizes new/changed titles without re-rendering/
-# re-uploading everything every time.
+# re-uploading everything every time. Stored as [score, badge fingerprint]
+# (see _badge_fingerprint), so a changed badge setting also takes effect.
 RENDERED_STATE_FILE = DATA_DIR / "rendered_state.json"
 PUSHED_STATE_FILE = DATA_DIR / "pushed_state.json"
+# Protocol of the last runs, shown in the footer (see _record_run).
+RUN_HISTORY_FILE = DATA_DIR / "run_history.json"
+# Hard cap, independent of RUN_HISTORY_RETENTION - a safety net so a very
+# long retention combined with a very tight cron can't grow without bound.
+RUN_HISTORY_MAX_ENTRIES = 500
 # ---------------------------------------------------------------------------
 
 app = Flask(__name__)
@@ -321,11 +373,93 @@ def _load_state_file(path: Path) -> dict:
         return {}
 
 
-def _record_state(path: Path, rating_key, score) -> None:
+def _record_state(path: Path, rating_key, value) -> None:
     with _state_lock:
         state = _load_state_file(path)
-        state[str(rating_key)] = score
+        state[str(rating_key)] = value
         path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def band_styles() -> dict:
+    """Band key -> {"color", "text"} for the active palette, handed to the
+    template as CSS variables. The text color follows the background's
+    perceived brightness, so both palettes stay legible without a hardcoded
+    special case per color (the old CSS only special-cased yellow)."""
+    styles = {}
+    for key in BAND_KEYS:
+        r, g, b = COLOR_SCHEMES[BADGE_COLOR_SCHEME][key]
+        brightness = 0.299 * r + 0.587 * g + 0.114 * b
+        styles[key] = {
+            "color": f"#{r:02x}{g:02x}{b:02x}",
+            "text": "#2a1e00" if brightness > 150 else "#ffffff",
+        }
+    return styles
+
+
+def _badge_fingerprint() -> str:
+    """
+    Short fingerprint of every setting that is burned into the image. Stored
+    alongside the score in rendered_state/pushed_state, so changing a badge
+    setting re-renders AND re-uploads on the next sync - the score alone
+    wouldn't change, so otherwise old badges would silently stay put.
+    """
+    return f"{BADGE_COLOR_SCHEME}|{BADGE_POSITION}|{BADGE_LABEL_STYLE}|{BADGE_WIDTH_PERCENT:g}"
+
+
+def _state_value(score) -> list:
+    """State entry for a score under the current badge settings. Entries
+    written before this existed were plain numbers and simply compare as
+    unequal - which correctly triggers a one-time re-render."""
+    return [score, _badge_fingerprint()]
+
+
+def _prune_runs(runs: list) -> list:
+    """Drops entries older than RUN_HISTORY_RETENTION_DAYS, then enforces the
+    hard cap. Entries without a usable timestamp are kept - better a stray
+    line in the protocol than silently throwing data away."""
+    if RUN_HISTORY_RETENTION_DAYS:
+        cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+            days=RUN_HISTORY_RETENTION_DAYS
+        )
+        kept = []
+        for run in runs:
+            try:
+                started = datetime.datetime.fromisoformat(run["started_at"])
+            except (KeyError, TypeError, ValueError):
+                kept.append(run)
+                continue
+            if started >= cutoff:
+                kept.append(run)
+        runs = kept
+    return runs[-RUN_HISTORY_MAX_ENTRIES:]
+
+
+def load_runs() -> list:
+    if not RUN_HISTORY_FILE.exists():
+        return []
+    try:
+        runs = json.loads(RUN_HISTORY_FILE.read_text(encoding="utf-8"))
+        return runs if isinstance(runs, list) else []
+    except Exception:
+        return []
+
+
+def _record_run(trigger: str, started: datetime.datetime, stats: dict) -> None:
+    """Appends one run to the protocol. Best-effort: a broken protocol file
+    must never abort the actual sync."""
+    finished = datetime.datetime.now(datetime.timezone.utc)
+    entry = {
+        "trigger": trigger,
+        "started_at": started.isoformat(),
+        "duration_seconds": round((finished - started).total_seconds(), 1),
+        **{k: v for k, v in stats.items() if v is not None},
+    }
+    try:
+        with _state_lock:
+            runs = _prune_runs(load_runs() + [entry])
+            RUN_HISTORY_FILE.write_text(json.dumps(runs, indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception as e:
+        print(f"[history] Could not write run protocol: {e}", flush=True)
 
 
 def render_branded_image(item, entry: dict, force: bool = False) -> Path:
@@ -343,7 +477,7 @@ def render_branded_image(item, entry: dict, force: bool = False) -> Path:
     rk = str(item.ratingKey)
     branded_path = BRANDED_DIR / f"{rk}.jpg"
     rendered_state = _load_state_file(RENDERED_STATE_FILE)
-    if not force and branded_path.exists() and rendered_state.get(rk) == entry["score"]:
+    if not force and branded_path.exists() and rendered_state.get(rk) == _state_value(entry["score"]):
         return branded_path
 
     original_path = ORIGINALS_DIR / f"{rk}.jpg"
@@ -357,8 +491,9 @@ def render_branded_image(item, entry: dict, force: bool = False) -> Path:
         position=BADGE_POSITION,
         label_style=BADGE_LABEL_STYLE,
         width_percent=BADGE_WIDTH_PERCENT,
+        color_scheme=BADGE_COLOR_SCHEME,
     )
-    _record_state(RENDERED_STATE_FILE, rk, entry["score"])
+    _record_state(RENDERED_STATE_FILE, rk, _state_value(entry["score"]))
     return branded_path
 
 
@@ -373,7 +508,7 @@ def push_to_plex(plex, item, entry: dict, force: bool = False) -> str:
     item.uploadPoster(filepath=str(branded_path))
     if CLEANUP_OLD_POSTERS:
         cleanup_old_uploaded_posters(plex, item)
-    _record_state(PUSHED_STATE_FILE, item.ratingKey, entry["score"])
+    _record_state(PUSHED_STATE_FILE, item.ratingKey, _state_value(entry["score"]))
     return t("push.ok", title=_display_title(item))
 
 
@@ -423,13 +558,14 @@ def _emit(log, msg, prefix="sync"):
         log(msg)
 
 
-def score_sync(log=None) -> None:
+def score_sync(log=None) -> dict:
     """Stage 1: incremental score sync against isitwokeornot.com. Triggered
-    standalone via the "Update Score Database" button or as part of the autopilot."""
+    standalone via the "Update Score Database" button or as part of the
+    autopilot. Returns stats for the run protocol (see _record_run)."""
     wait = _reserve_rebuild_slot()
     if wait:
         _emit(log, t("score_sync.cooldown", seconds=int(wait)))
-        return
+        return {"skipped_cooldown": True}
     import build_score_cache as bsc
     cache = load_cache()
 
@@ -440,9 +576,10 @@ def score_sync(log=None) -> None:
     cache, processed = bsc.build_cache(cache, on_progress=on_progress)
     CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
     _emit(log, t("score_sync.done", processed=processed, total=len(cache)))
+    return {"scores_updated": processed, "scores_total": len(cache)}
 
 
-def sync_library(log=None) -> list[str]:
+def sync_library(log=None) -> dict:
     """
     Stage 2 - Plex comparison, without uploading anything to Plex:
       - fetch missing original posters for titles with a known score (ORIGINALS_DIR)
@@ -451,13 +588,14 @@ def sync_library(log=None) -> list[str]:
       - delete local original/branded files for titles no longer in the
         (already fetched here anyway) Plex library ("orphans")
 
-    Returns the titles for which no TMDb original was found (see
-    "missing_originals" in api_sync_library) - evaluated independent of
-    language, so the frontend popup isn't reliant on translated log text.
+    Returns stats for the run protocol, including "missing_originals": the
+    titles for which no TMDb original was found. That list is evaluated
+    independent of language, so the frontend popup isn't reliant on
+    translated log text.
     """
     if demo_mode():
         _emit(log, t("sync.demo_mode"))
-        return []
+        return {"missing_originals": []}
 
     cache = load_cache()
     plex = get_plex()
@@ -470,12 +608,14 @@ def sync_library(log=None) -> list[str]:
     # Seasons have no TMDb ID of their own, so they piggyback on their
     # show's match instead of being looked up independently.
     titled_entries = []
+    matched_titles = 0  # movies/shows only - seasons inherit and would inflate this
     for rk, (item, prefix) in library.items():
         tmdb_id = tmdb_id_from_item(item)
         entry = cache.get(f"{prefix}:{tmdb_id}") if tmdb_id else None
         if not entry:
             continue
         titled_entries.append((rk, item, entry))
+        matched_titles += 1
         if prefix == "tv":
             for season in _seasons_for_show(item):
                 season_rk = str(season.ratingKey)
@@ -532,10 +672,16 @@ def sync_library(log=None) -> list[str]:
     if not to_warm and not to_render and not removed:
         _emit(log, t("sync.nothing_new"))
 
-    return warnings
+    return {
+        "matched": matched_titles,
+        "originals_fetched": len(to_warm),
+        "rendered": rendered,
+        "orphans_removed": removed,
+        "missing_originals": warnings,
+    }
 
 
-def push_pending_to_plex(log=None, progress=None, force: bool = False, rating_keys=None) -> None:
+def push_pending_to_plex(log=None, progress=None, force: bool = False, rating_keys=None) -> dict:
     """
     Stage 3 - uploads posters to Plex. Without rating_keys: the whole
     library, but by default (force=False) only titles that are new or whose
@@ -548,7 +694,7 @@ def push_pending_to_plex(log=None, progress=None, force: bool = False, rating_ke
     """
     if demo_mode():
         _emit(log, t("push.demo_mode"))
-        return
+        return {"pushed": 0, "push_failed": 0}
 
     cache = load_cache()
     plex = get_plex()
@@ -566,7 +712,7 @@ def push_pending_to_plex(log=None, progress=None, force: bool = False, rating_ke
         entry = cache.get(f"{prefix}:{tmdb_id}") if tmdb_id else None
         if not entry:
             continue
-        if force or pushed_state.get(rk) != entry["score"]:
+        if force or pushed_state.get(rk) != _state_value(entry["score"]):
             to_push.append((item, entry))
         # Push the show's seasons along with it - same score, own poster
         # (see _seasons_for_show). Applies whether pushing the whole library
@@ -574,24 +720,32 @@ def push_pending_to_plex(log=None, progress=None, force: bool = False, rating_ke
         if prefix == "tv":
             for season in _seasons_for_show(item):
                 season_rk = str(season.ratingKey)
-                if force or pushed_state.get(season_rk) != entry["score"]:
+                if force or pushed_state.get(season_rk) != _state_value(entry["score"]):
                     to_push.append((season, entry))
 
     if not to_push:
         _emit(log, t("push.nothing_to_push"))
         if progress:
             progress(0, 0)
-        return
+        return {"pushed": 0, "push_failed": 0}
 
     progress_lock = threading.Lock()
     done = 0
+    pushed = 0
+    failed = 0
 
     def process(item, entry):
-        nonlocal done
+        nonlocal done, pushed, failed
         try:
-            _emit(log, push_to_plex(plex, item, entry, force))
+            message = push_to_plex(plex, item, entry, force)
         except Exception as e:
             _emit(log, t("push.error", title=_display_title(item), error=e))
+            with progress_lock:
+                failed += 1
+        else:
+            _emit(log, message)
+            with progress_lock:
+                pushed += 1
         finally:
             if progress:
                 with progress_lock:
@@ -603,21 +757,30 @@ def push_pending_to_plex(log=None, progress=None, force: bool = False, rating_ke
         for f in as_completed(futures):
             pass
 
+    return {"pushed": pushed, "push_failed": failed}
 
-def autonomous_sync(log=None, progress=None) -> None:
+
+def autonomous_sync(log=None, progress=None) -> dict:
     """Autopilot: all three stages in sequence (score sync, Plex comparison
     incl. rendering, push). Usable individually for manual intervention: see
-    score_sync/sync_library/push_pending_to_plex."""
+    score_sync/sync_library/push_pending_to_plex. Records one combined entry
+    in the run protocol."""
     def _progress(step):
         if progress:
             progress(step, 3)
 
-    score_sync(log=log)
-    _progress(1)
-    sync_library(log=log)
-    _progress(2)
-    push_pending_to_plex(log=log)
-    _progress(3)
+    started = datetime.datetime.now(datetime.timezone.utc)
+    stats = {}
+    try:
+        stats.update(score_sync(log=log))
+        _progress(1)
+        stats.update(sync_library(log=log))
+        _progress(2)
+        stats.update(push_pending_to_plex(log=log))
+        _progress(3)
+    finally:
+        _record_run("autopilot", started, stats)
+    return stats
 
 
 def _reserve_rebuild_slot() -> float:
@@ -660,12 +823,32 @@ def index():
         badge_label_style=BADGE_LABEL_STYLE,
         language=LANGUAGE,
         i18n=TRANSLATIONS,
+        bands=BAND_KEYS,
+        band_styles=band_styles(),
+        band_max=dict(zip(BAND_KEYS, BAND_MAX)),
     )
 
 
 @app.route("/healthz")
 def healthz():
-    return jsonify({"status": "ok", "demo_mode": demo_mode()})
+    return jsonify({
+        "status": "ok",
+        "demo_mode": demo_mode(),
+        "version": APP_VERSION,
+        "build_date": BUILD_DATE or None,
+    })
+
+
+@app.route("/api/status")
+def api_status():
+    """Version/build info plus the run protocol for the footer. Newest run
+    first, so the frontend doesn't have to reverse the list."""
+    return jsonify({
+        "version": APP_VERSION,
+        "build_date": BUILD_DATE or None,
+        "color_scheme": BADGE_COLOR_SCHEME,
+        "runs": list(reversed(load_runs())),
+    })
 
 
 @app.route("/api/library")
@@ -750,6 +933,8 @@ def api_rebuild_cache():
     JOBS[job_id] = {"state": "running", "progress": [0, 0], "log": [t("rebuild_cache.loading")]}
 
     def run():
+        started = datetime.datetime.now(datetime.timezone.utc)
+        stats = {}
         try:
             import build_score_cache as bsc
             cache = load_cache()
@@ -761,11 +946,15 @@ def api_rebuild_cache():
 
             cache, processed = bsc.build_cache(cache, on_progress=on_progress, skip_existing=not full)
             CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
+            stats = {"scores_updated": processed, "scores_total": len(cache)}
             JOBS[job_id]["state"] = "done"
             JOBS[job_id]["log"].append(t("rebuild_cache.done", processed=processed, total=len(cache)))
         except Exception as e:
             JOBS[job_id]["state"] = "error"
             JOBS[job_id]["log"].append(str(e))
+            stats["error"] = True
+        finally:
+            _record_run("score_sync_full" if full else "score_sync", started, stats)
 
     threading.Thread(target=run, daemon=True).start()
     return jsonify({"job_id": job_id})
@@ -783,13 +972,18 @@ def api_sync_library():
     JOBS[job_id] = {"state": "running", "progress": [0, 0], "log": []}
 
     def run():
+        started = datetime.datetime.now(datetime.timezone.utc)
+        stats = {}
         try:
-            missing_originals = sync_library(log=lambda msg: JOBS[job_id]["log"].append(msg))
-            JOBS[job_id]["missing_originals"] = missing_originals
+            stats = sync_library(log=lambda msg: JOBS[job_id]["log"].append(msg))
+            JOBS[job_id]["missing_originals"] = stats.get("missing_originals", [])
             JOBS[job_id]["state"] = "done"
         except Exception as e:
             JOBS[job_id]["state"] = "error"
             JOBS[job_id]["log"].append(str(e))
+            stats["error"] = True
+        finally:
+            _record_run("sync", started, stats)
 
     threading.Thread(target=run, daemon=True).start()
     return jsonify({"job_id": job_id})
@@ -810,8 +1004,10 @@ def api_apply():
     JOBS[job_id] = {"state": "running", "progress": [0, len(rating_keys)], "log": []}
 
     def run():
+        started = datetime.datetime.now(datetime.timezone.utc)
+        stats = {}
         try:
-            push_pending_to_plex(
+            stats = push_pending_to_plex(
                 log=lambda msg: JOBS[job_id]["log"].append(msg),
                 progress=lambda done, total: JOBS[job_id].update(progress=[done, total]),
                 force=True,
@@ -821,6 +1017,9 @@ def api_apply():
         except Exception as e:
             JOBS[job_id]["state"] = "error"
             JOBS[job_id]["log"].append(str(e))
+            stats["error"] = True
+        finally:
+            _record_run("push", started, stats)
 
     threading.Thread(target=run, daemon=True).start()
     return jsonify({"job_id": job_id})
@@ -838,6 +1037,8 @@ def api_cleanup_posters():
     JOBS[job_id] = {"state": "running", "progress": [0, 0], "log": []}
 
     def run():
+        started = datetime.datetime.now(datetime.timezone.utc)
+        stats = {}
         try:
             plex = get_plex()
             items = []
@@ -873,11 +1074,15 @@ def api_cleanup_posters():
                 for f in as_completed(futures):
                     pass
 
+            stats = {"plex_posters_removed": removed_total}
             JOBS[job_id]["state"] = "done"
             JOBS[job_id]["log"].append(t("cleanup.done", count=removed_total))
         except Exception as e:
             JOBS[job_id]["state"] = "error"
             JOBS[job_id]["log"].append(str(e))
+            stats["error"] = True
+        finally:
+            _record_run("cleanup", started, stats)
 
     threading.Thread(target=run, daemon=True).start()
     return jsonify({"job_id": job_id})

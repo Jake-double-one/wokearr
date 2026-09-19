@@ -9,10 +9,23 @@ function t(key, vars) {
   return template;
 }
 
+// Official bands from isitwokeornot.com. Keys match data-filter / count-<key>
+// in the template; CSS classes use the kebab-case variant (see bandClass).
+const BANDS = [
+  { key: "not_woke", max: 19 },
+  { key: "slightly_woke", max: 39 },
+  { key: "woke", max: 59 },
+  { key: "very_woke", max: 79 },
+  { key: "super_woke", max: 100 },
+];
+
 function scoreBand(score) {
-  if (score <= 33) return "green";
-  if (score <= 66) return "yellow";
-  return "red";
+  const band = BANDS.find(b => score <= b.max);
+  return band ? band.key : BANDS[BANDS.length - 1].key;
+}
+
+function bandClass(band) {
+  return band.replace(/_/g, "-");
 }
 
 function scoreLabel(score) {
@@ -34,7 +47,7 @@ function render() {
     const sourceUrl = item.sourceUrl || "https://isitwokeornot.com/";
     card.innerHTML = `
       <img src="/api/poster/${item.ratingKey}" alt="${item.title}" loading="lazy">
-      <div class="badge badge-${band}">${scoreLabel(item.score)}</div>
+      <div class="badge badge-${bandClass(band)}">${scoreLabel(item.score)}</div>
       <div class="card-overlay">
         <div class="card-title">${item.title}</div>
         <div class="card-year">${item.year || ""}</div>
@@ -59,8 +72,8 @@ function render() {
   });
 
   document.getElementById("count-all").textContent = ITEMS.length;
-  for (const band of ["red", "yellow", "green"]) {
-    document.getElementById(`count-${band}`).textContent = ITEMS.filter(i => scoreBand(i.score) === band).length;
+  for (const { key } of BANDS) {
+    document.getElementById(`count-${key}`).textContent = ITEMS.filter(i => scoreBand(i.score) === key).length;
   }
 }
 
@@ -85,9 +98,104 @@ async function pollJob(jobId, labelPrefix) {
     if (job.state === "done" || job.state === "error") {
       showToast(job.state === "done" ? `${labelPrefix}: ${t("toast.suffix_done")}` : `${labelPrefix}: ${t("toast.suffix_error")}`, 100);
       setTimeout(hideToast, 3000);
+      // Every job writes a protocol entry - refresh it here so all four
+      // buttons get it without each handler having to remember.
+      loadStatus();
       return job;
     }
     await new Promise(r => setTimeout(r, 700));
+  }
+}
+
+// Which run-stat keys are worth showing, in display order. Zero values are
+// skipped so a quiet run stays a short line instead of a wall of zeros.
+const RUN_STATS = [
+  "scores_updated",
+  "originals_fetched",
+  "rendered",
+  "pushed",
+  "orphans_removed",
+  "plex_posters_removed",
+];
+
+function formatWhen(iso) {
+  const d = new Date(iso);
+  // Formatted in the configured UI language, not the browser's - otherwise a
+  // German UI would show US-formatted timestamps.
+  return isNaN(d) ? iso : d.toLocaleString(window.__LANGUAGE__ || undefined);
+}
+
+function formatDuration(seconds) {
+  if (seconds == null) return "";
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const mins = Math.floor(seconds / 60);
+  return `${mins}m ${Math.round(seconds % 60)}s`;
+}
+
+function runChanges(run, previousRun) {
+  const parts = [];
+  if (run.matched != null) {
+    let label = `${run.matched} ${t("status.stat.matched")}`;
+    if (previousRun && previousRun.matched != null) {
+      const delta = run.matched - previousRun.matched;
+      if (delta !== 0) label += ` (${delta > 0 ? "+" : ""}${delta})`;
+    }
+    parts.push(label);
+  }
+  for (const key of RUN_STATS) {
+    if (run[key]) parts.push(`${run[key]} ${t(`status.stat.${key}`)}`);
+  }
+  if (run.push_failed) parts.push(`${run.push_failed} ${t("status.stat.errors")}`);
+  if (run.error) parts.push(t("status.failed"));
+  return parts.length ? parts.join(", ") : t("status.no_changes");
+}
+
+function renderStatus(data) {
+  const versionEl = document.getElementById("status-version");
+  const version = data.version ? `Wokearr ${data.version}` : "";
+  const build = data.build_date ? ` · ${t("status.build", { date: formatWhen(data.build_date) })}` : "";
+  versionEl.textContent = version + build;
+
+  const runs = data.runs || [];
+  const lastRunEl = document.getElementById("status-last-run");
+  if (!runs.length) {
+    lastRunEl.textContent = t("status.never");
+  } else {
+    // runs[] is newest first, so the entry after it is the previous run
+    lastRunEl.textContent =
+      t("status.last_run", { when: formatWhen(runs[0].started_at) }) + " · " + runChanges(runs[0], runs[1]);
+  }
+
+  const history = document.getElementById("status-history");
+  if (!runs.length) {
+    history.innerHTML = "";
+    return;
+  }
+  const rows = runs.map((run, i) => `
+    <tr>
+      <td>${formatWhen(run.started_at)}</td>
+      <td>${t(`status.trigger.${run.trigger}`)}</td>
+      <td class="status-changes${run.error ? " status-error" : ""}">${runChanges(run, runs[i + 1])}</td>
+      <td>${formatDuration(run.duration_seconds)}</td>
+    </tr>`).join("");
+  history.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>${t("status.col.when")}</th>
+        <th>${t("status.col.trigger")}</th>
+        <th>${t("status.col.changes")}</th>
+        <th>${t("status.col.duration")}</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+async function loadStatus() {
+  try {
+    const res = await fetch("/api/status");
+    renderStatus(await res.json());
+  } catch (e) {
+    // The protocol is a nice-to-have - never let it break the main view
   }
 }
 
@@ -181,6 +289,15 @@ document.getElementById("btn-cleanup-posters").addEventListener("click", async (
   await pollJob(data.job_id, t("toast.cleaning_posters"));
 });
 
+document.getElementById("status-toggle").addEventListener("click", (e) => {
+  const btn = e.currentTarget;
+  const history = document.getElementById("status-history");
+  const open = history.hidden;
+  history.hidden = !open;
+  btn.setAttribute("aria-expanded", String(open));
+  btn.title = open ? t("status.hide_history") : t("status.show_history");
+});
+
 document.querySelectorAll(".chip").forEach(chip => {
   chip.addEventListener("click", () => {
     document.querySelectorAll(".chip").forEach(c => c.classList.remove("chip-active"));
@@ -190,4 +307,7 @@ document.querySelectorAll(".chip").forEach(chip => {
   });
 });
 
+document.getElementById("status-toggle").title = t("status.show_history");
+
 loadLibrary();
+loadStatus();

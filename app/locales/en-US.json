@@ -10,37 +10,30 @@
   "topbar.btn_rebuild_full.title": "Re-fetches every title (takes noticeably longer)",
   "topbar.btn_cleanup_posters.label": "Delete Old Posters in Plex",
   "topbar.btn_cleanup_posters.title": "Deletes old, self-uploaded poster versions in Plex (poster history) that accumulate over time",
-
   "filter.all": "All",
-  "filter.red": "Red",
-  "filter.yellow": "Yellow",
-  "filter.green": "Green",
-
+  "filter.not_woke": "Not woke",
+  "filter.slightly_woke": "Slightly woke",
+  "filter.woke": "Woke",
+  "filter.very_woke": "Very woke",
+  "filter.super_woke": "Super woke",
   "empty_state": "No titles with a woke score found. Click \"Sync Now\" or check PLEX_URL/PLEX_TOKEN.",
-
   "footer.source_prefix": "Score data from",
   "footer.disclaimer": "not an official tool of isitwokeornot.com, Plex Inc., or TMDb",
-
   "card.push": "Push",
   "card.push_done": "Done",
   "card.loading": "...",
   "card.source_title": "Source: isitwokeornot.com",
-
   "toast.uploading_posters": "Uploading posters",
   "toast.building_cache": "Building cache",
   "toast.syncing_with_plex": "Syncing with Plex",
   "toast.cleaning_posters": "Cleaning up Plex posters",
   "toast.suffix_done": "done",
   "toast.suffix_error": "error",
-
   "confirm.full_rebuild": "Start a full rebuild? This re-fetches every title and takes noticeably longer than a normal update.",
   "confirm.cleanup_posters": "Delete old, self-uploaded poster versions across the entire Plex library?\n\nThe currently selected posters are left untouched - only unused older versions are removed. Original posters from TMDb & co. are not touched.",
-
   "alert.missing_originals": "Warning: no TMDb original found in Plex for: {titles} - the current poster was used as a base (possible double badge). Fix: run 'Refresh Metadata' in Plex, then sync again.",
-
   "score_sync.cooldown": "Score sync skipped (cooldown, {seconds}s left).",
   "score_sync.done": "Score sync: {processed} new titles, {total} total in cache.",
-
   "sync.demo_mode": "Demo mode: no Plex configured.",
   "sync.poster_fetch_error": "Error fetching original poster ({title}): {error}",
   "sync.posters_fetched": "Original posters: {count} newly fetched.",
@@ -49,22 +42,43 @@
   "sync.rendered_count": "Branded posters rendered: {count}.",
   "sync.orphans_removed": "Orphans removed: {count} file(s) for titles no longer present.",
   "sync.nothing_new": "Synced: nothing new.",
-
   "push.demo_mode": "Demo mode: no Plex to push to.",
   "push.nothing_to_push": "Nothing to push.",
   "push.error": "Error pushing ({title}): {error}",
   "push.ok": "OK: {title}",
-
   "render.missing_original": "No original poster for '{title}' in cache - sync first.",
-
   "rebuild_cache.cooldown_error": "Please wait a moment: next sitemap fetch possible in {seconds}s (cooldown protects isitwokeornot.com from too-frequent requests).",
   "rebuild_cache.loading": "Loading sitemap...",
   "rebuild_cache.done": "Done: {processed} titles processed, {total} total in cache.",
-
   "api.sync_library.demo_error": "Demo mode: no Plex library to sync with.",
   "api.apply.demo_error": "Demo mode: set PLEX_URL/PLEX_TOKEN as environment variables to actually push.",
   "api.cleanup.demo_error": "Demo mode: no Plex library to clean up.",
-
   "cleanup.item_error": "Error for {title}: {error}",
-  "cleanup.done": "Done: {count} old poster versions removed in Plex."
+  "cleanup.done": "Done: {count} old poster versions removed in Plex.",
+  "status.last_run": "Last run: {when}",
+  "status.never": "No run recorded yet",
+  "status.show_history": "Show history",
+  "status.hide_history": "Hide history",
+  "status.history_title": "Recent runs",
+  "status.col.when": "When",
+  "status.col.trigger": "Trigger",
+  "status.col.changes": "Changes",
+  "status.col.duration": "Duration",
+  "status.trigger.autopilot": "Autopilot",
+  "status.trigger.score_sync": "Score database",
+  "status.trigger.score_sync_full": "Full rebuild",
+  "status.trigger.sync": "Sync",
+  "status.trigger.push": "Push to Plex",
+  "status.trigger.cleanup": "Poster cleanup",
+  "status.stat.matched": "matched",
+  "status.stat.scores_updated": "scores updated",
+  "status.stat.originals_fetched": "originals fetched",
+  "status.stat.rendered": "rendered",
+  "status.stat.pushed": "pushed",
+  "status.stat.orphans_removed": "orphans removed",
+  "status.stat.plex_posters_removed": "old posters removed",
+  "status.stat.errors": "errors",
+  "status.no_changes": "no changes",
+  "status.failed": "failed",
+  "status.build": "Build {date}"
 }

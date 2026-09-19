@@ -6,7 +6,9 @@ Small, self-hosted web UI in a Radarr/Sonarr look that badges movies and shows
 in your Plex library with a traffic-light indicator (red/yellow/green), based
 on the score from [isitwokeornot.com](https://isitwokeornot.com/).
 
-- **Red** = high score (warning), **Yellow** = medium, **Green** = low
+- Five bands, matching the official ones from isitwokeornot.com: **0–19**
+  not woke, **20–39** slightly woke, **40–59** woke, **60–79** very woke,
+  **80–100** super woke. Two color palettes to choose from (`BADGE_COLOR_SCHEME`)
 - Matching runs on the TMDb ID that both Plex and isitwokeornot.com keep per
   title
 - For shows, every season gets badged too (with the show's score, on that
@@ -76,6 +78,8 @@ e.g. to `:v0.1.0`.
 | `BADGE_POSITION`    | no    | `top-right`     | `top-right` \| `top-left` \| `bottom-right` \| `bottom-left` |
 | `BADGE_LABEL_STYLE` | no    | `percent`       | `percent` (`37%`) \| `woke` (`37% woke`) |
 | `BADGE_WIDTH_PERCENT` | no  | `20`            | Badge width relative to poster width, in percent. Hard-floored at `20` (lower values are automatically raised) |
+| `BADGE_COLOR_SCHEME` | no  | `standard`      | Palette for the five score bands: `standard` (as used by isitwokeornot.com) \| `modified` (green/yellow/orange/red/violet) |
+| `RUN_HISTORY_RETENTION` | no | `4w`          | How long run-protocol entries are kept: `<number><unit>` with `d`/`w`/`m`, e.g. `3d`, `4w`, `6m`. `0` keeps everything |
 | `AUTO_SYNC_CRON` | no | empty (off) | 5-field cron expression for the full autopilot run (score sync, poster cache, cleanup, auto-push). Empty or `0` disables it. E.g. `0 * * * *` for hourly. |
 | `CACHE_REBUILD_COOLDOWN_MINUTES` | no | `5` | Minimum gap between two sitemap fetches (manual or automatic) |
 | `CLEANUP_OLD_POSTERS` | no | `true` | After every push, automatically delete older, self-uploaded poster versions in Plex (see below) |
@@ -84,9 +88,12 @@ e.g. to `:v0.1.0`.
 
 Changes to environment variables only take effect after a **container
 redeploy** (Portainer: **Update the stack**, not just reloading the page).
-`BADGE_LABEL_STYLE` and `BADGE_WIDTH_PERCENT` also only affect posters that
-are pushed *from now on* - the text and size are burned into the image and
-don't change retroactively for posters already pushed.
+Changing a badge setting (`BADGE_COLOR_SCHEME`, `BADGE_POSITION`,
+`BADGE_LABEL_STYLE`, `BADGE_WIDTH_PERCENT`) re-renders and re-uploads the
+affected posters on the next sync automatically - the settings are burned
+into the image, so Wokearr tracks which settings a poster was rendered with.
+Note that the first run after such a change therefore covers the **whole**
+library, seasons included.
 
 ### Setting PLEX_URL correctly
 
@@ -110,8 +117,19 @@ Wrong: `https://192.168.1.10`, `192.168.1.10:32400` (no scheme), `http://192.168
 The `/data` volume holds and survives container restarts/updates:
 `score_cache.json` (score database), `originals/` (unbadged posters),
 `branded/` (fully rendered posters, not necessarily uploaded yet),
-`rendered_state.json`/`pushed_state.json` (track, per title, which score was
-last rendered and last uploaded to Plex).
+`rendered_state.json`/`pushed_state.json` (track, per title, which score and
+badge settings were last rendered and last uploaded to Plex),
+`run_history.json` (the run protocol shown in the footer).
+
+### Run protocol
+
+The footer shows one quiet line with the last run and what it changed
+(matched titles incl. the delta, scores updated, posters rendered/uploaded,
+orphans cleaned up). A click expands the recent runs as a compact table -
+collapsed by default. Every run is recorded, whether it came from the
+autopilot or from one of the buttons. How long entries are kept is set via
+`RUN_HISTORY_RETENTION`. The footer also shows the running version and, for
+`latest` images, the build date.
 
 ## Autopilot - automatic operation
 

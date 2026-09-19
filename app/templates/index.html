@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Wokearr</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<style>
+  /* Band colors of the active palette (BADGE_COLOR_SCHEME), see band_styles() */
+  :root {
+  {%- for band in bands %}
+    --band-{{ band | replace('_', '-') }}: {{ band_styles[band].color }};
+    --band-{{ band | replace('_', '-') }}-text: {{ band_styles[band].text }};
+  {%- endfor %}
+  }
+</style>
 </head>
 <body>
 
@@ -29,9 +38,11 @@
 
 <nav class="filterbar">
   <button class="chip chip-active" data-filter="all">{{ t('filter.all') }} <span class="count" id="count-all">0</span></button>
-  <button class="chip" data-filter="red"><span class="dot dot-red"></span>{{ t('filter.red') }} <span class="count" id="count-red">0</span></button>
-  <button class="chip" data-filter="yellow"><span class="dot dot-yellow"></span>{{ t('filter.yellow') }} <span class="count" id="count-yellow">0</span></button>
-  <button class="chip" data-filter="green"><span class="dot dot-green"></span>{{ t('filter.green') }} <span class="count" id="count-green">0</span></button>
+  {%- for band in bands %}
+  <button class="chip" data-filter="{{ band }}" title="{{ 0 if loop.first else band_max[bands[loop.index0 - 1]] + 1 }}–{{ band_max[band] }}%">
+    <span class="dot dot-{{ band | replace('_', '-') }}"></span>{{ t('filter.' ~ band) }} <span class="count" id="count-{{ band }}">0</span>
+  </button>
+  {%- endfor %}
 </nav>
 
 <main>
@@ -42,8 +53,17 @@
 </main>
 
 <footer class="app-footer">
-  {{ t('footer.source_prefix') }} <a href="https://isitwokeornot.com/" target="_blank" rel="noopener noreferrer">isitwokeornot.com</a>
-  &middot; {{ t('footer.disclaimer') }}
+  <div class="status-bar">
+    <button id="status-toggle" class="status-summary" aria-expanded="false" aria-controls="status-history">
+      <span id="status-last-run">{{ t('status.never') }}</span>
+    </button>
+    <span class="status-version" id="status-version"></span>
+  </div>
+  <div id="status-history" class="status-history" hidden></div>
+  <div class="footer-credits">
+    {{ t('footer.source_prefix') }} <a href="https://isitwokeornot.com/" target="_blank" rel="noopener noreferrer">isitwokeornot.com</a>
+    &middot; {{ t('footer.disclaimer') }}
+  </div>
 </footer>
 
 <div id="toast" class="toast" style="display:none">
@@ -55,6 +75,7 @@
   window.__DEMO__ = {{ demo | tojson }};
   window.__BADGE_LABEL_STYLE__ = {{ badge_label_style | tojson }};
   window.__I18N__ = {{ i18n | tojson }};
+  window.__LANGUAGE__ = {{ language | tojson }};
 </script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>

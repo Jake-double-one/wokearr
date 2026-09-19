@@ -67,6 +67,15 @@ if BADGE_COLOR_SCHEME not in COLOR_SCHEMES:
 APP_VERSION = os.environ.get("APP_VERSION", "").strip() or "dev"
 BUILD_DATE = os.environ.get("BUILD_DATE", "").strip()
 
+# Project home, linked from the version in the footer. A tagged version points
+# at its release notes, anything else (latest/dev) at the repository.
+REPO_URL = "https://github.com/Jake-double-one/wokearr"
+VERSION_URL = (
+    f"{REPO_URL}/releases/tag/{APP_VERSION}"
+    if re.fullmatch(r"v\d+(\.\d+)*", APP_VERSION)
+    else REPO_URL
+)
+
 # How long run-protocol entries are kept: "<number><unit>" with d(ays),
 # w(eeks) or m(onths, 30 days). "0" keeps everything (up to the hard cap).
 RUN_HISTORY_RETENTION_DEFAULT = "4w"
@@ -846,6 +855,7 @@ def api_status():
     return jsonify({
         "version": APP_VERSION,
         "build_date": BUILD_DATE or None,
+        "version_url": VERSION_URL,
         "color_scheme": BADGE_COLOR_SCHEME,
         "runs": list(reversed(load_runs())),
     })

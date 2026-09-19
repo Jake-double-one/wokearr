@@ -131,7 +131,11 @@ gerenderte/übertragene Poster, entfernte Leichen). Ein Klick klappt die
 letzten Läufe als kompakte Tabelle auf – standardmäßig zu. Protokolliert
 wird jeder Lauf, egal ob vom Autopiloten oder per Button. Wie lange Einträge
 bleiben, steuert `RUN_HISTORY_RETENTION`. Daneben steht die laufende Version,
-bei `latest`-Images zusätzlich das Build-Datum.
+bei `latest`-Images zusätzlich das Build-Datum. Die Version verlinkt auf dieses
+Repository – bei einer getaggten Version direkt auf deren Release-Notes.
+
+Eine Auflistung der Änderungen je Version steht in
+[CHANGELOG.md](CHANGELOG.md).
 
 ## Autopilot - automatischer Betrieb
 

@@ -152,9 +152,18 @@ function runChanges(run, previousRun) {
 
 function renderStatus(data) {
   const versionEl = document.getElementById("status-version");
-  const version = data.version ? `Wokearr ${data.version}` : "";
-  const build = data.build_date ? ` · ${t("status.build", { date: formatWhen(data.build_date) })}` : "";
-  versionEl.textContent = version + build;
+  versionEl.innerHTML = "";
+  if (data.version) {
+    const link = document.createElement("a");
+    link.href = data.version_url || "https://github.com/Jake-double-one/wokearr";
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = `Wokearr ${data.version}`;
+    versionEl.appendChild(link);
+  }
+  if (data.build_date) {
+    versionEl.append(` · ${t("status.build", { date: formatWhen(data.build_date) })}`);
+  }
 
   const runs = data.runs || [];
   const lastRunEl = document.getElementById("status-last-run");

@@ -225,6 +225,8 @@ main { padding: 20px; }
 }
 .status-summary:hover { color: var(--text); }
 .status-version { color: var(--muted); opacity: 0.75; font-variant-numeric: tabular-nums; }
+.status-version a { color: inherit; text-decoration: underline dotted; }
+.status-version a:hover { color: var(--text); }
 
 .status-history {
   max-width: 760px;

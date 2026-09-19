@@ -129,7 +129,10 @@ orphans cleaned up). A click expands the recent runs as a compact table -
 collapsed by default. Every run is recorded, whether it came from the
 autopilot or from one of the buttons. How long entries are kept is set via
 `RUN_HISTORY_RETENTION`. The footer also shows the running version and, for
-`latest` images, the build date.
+`latest` images, the build date. The version links to this repository - for a
+tagged version straight to its release notes.
+
+A per-version list of changes is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Autopilot - automatic operation
 

@@ -10,37 +10,30 @@
   "topbar.btn_rebuild_full.title": "Fragt alle Titel erneut ab (dauert deutlich länger)",
   "topbar.btn_cleanup_posters.label": "Alte Poster in Plex löschen",
   "topbar.btn_cleanup_posters.title": "Löscht alte, selbst hochgeladene Poster-Versionen in Plex (Poster-Historie), die sich über die Zeit ansammeln",
-
   "filter.all": "Alle",
-  "filter.red": "Rot",
-  "filter.yellow": "Gelb",
-  "filter.green": "Grün",
-
+  "filter.not_woke": "Nicht woke",
+  "filter.slightly_woke": "Leicht woke",
+  "filter.woke": "Woke",
+  "filter.very_woke": "Sehr woke",
+  "filter.super_woke": "Extrem woke",
   "empty_state": "Keine Titel mit Woke-Score gefunden. \"Jetzt synchronisieren\" klicken oder PLEX_URL/PLEX_TOKEN pruefen.",
-
   "footer.source_prefix": "Score-Daten von",
   "footer.disclaimer": "kein offizielles Tool von isitwokeornot.com, Plex Inc. oder TMDb",
-
   "card.push": "Übertragen",
   "card.push_done": "Erledigt",
   "card.loading": "...",
   "card.source_title": "Quelle: isitwokeornot.com",
-
   "toast.uploading_posters": "Poster werden übertragen",
   "toast.building_cache": "Cache wird aufgebaut",
   "toast.syncing_with_plex": "Synchronisiere mit Plex",
   "toast.cleaning_posters": "Plex-Poster werden aufgeräumt",
   "toast.suffix_done": "fertig",
   "toast.suffix_error": "Fehler",
-
   "confirm.full_rebuild": "Kompletten Neuaufbau starten? Das fragt alle Titel erneut ab und dauert deutlich länger als ein normales Update.",
   "confirm.cleanup_posters": "Alte, selbst hochgeladene Poster-Versionen in der gesamten Plex-Bibliothek löschen?\n\nDie aktuell ausgewählten Poster bleiben unangetastet, nur ungenutzte ältere Versionen werden entfernt. Original-Poster von TMDb & Co. werden nicht angerührt.",
-
   "alert.missing_originals": "Warnung: kein TMDb-Original in Plex gefunden fuer: {titles} - aktuelles Poster wurde als Basis genutzt (evtl. doppelter Badge). Fix: in Plex 'Metadaten aktualisieren', danach erneut synchronisieren.",
-
   "score_sync.cooldown": "Score-Sync uebersprungen (Cooldown, noch {seconds}s aktiv).",
   "score_sync.done": "Score-Sync: {processed} neue Titel, {total} insgesamt im Cache.",
-
   "sync.demo_mode": "Demo-Modus: kein Plex konfiguriert.",
   "sync.poster_fetch_error": "Fehler beim Original-Poster holen ({title}): {error}",
   "sync.posters_fetched": "Original-Poster: {count} neue geholt.",
@@ -49,22 +42,43 @@
   "sync.rendered_count": "Gebrandete Poster gerendert: {count}.",
   "sync.orphans_removed": "Leichen entfernt: {count} Datei(en) fuer nicht mehr vorhandene Titel.",
   "sync.nothing_new": "Synchronisiert: nichts Neues.",
-
   "push.demo_mode": "Demo-Modus: kein Plex zum Uebertragen.",
   "push.nothing_to_push": "Nichts zu uebertragen.",
   "push.error": "Fehler beim Uebertragen ({title}): {error}",
   "push.ok": "OK: {title}",
-
   "render.missing_original": "Kein Original-Poster fuer '{title}' im Cache - erst synchronisieren.",
-
   "rebuild_cache.cooldown_error": "Bitte kurz warten: naechster Sitemap-Abruf erst in {seconds}s moeglich (Cooldown schuetzt isitwokeornot.com vor zu haeufigen Anfragen).",
   "rebuild_cache.loading": "Sitemap wird geladen...",
   "rebuild_cache.done": "Fertig: {processed} Titel verarbeitet, {total} insgesamt im Cache.",
-
   "api.sync_library.demo_error": "Demo-Modus: keine Plex-Bibliothek zum Abgleichen.",
   "api.apply.demo_error": "Demo-Modus: PLEX_URL/PLEX_TOKEN als Umgebungsvariablen setzen, um wirklich zu uebertragen.",
   "api.cleanup.demo_error": "Demo-Modus: keine Plex-Bibliothek zum Aufraeumen.",
-
   "cleanup.item_error": "Fehler bei {title}: {error}",
-  "cleanup.done": "Fertig: {count} alte Poster-Versionen in Plex entfernt."
+  "cleanup.done": "Fertig: {count} alte Poster-Versionen in Plex entfernt.",
+  "status.last_run": "Letzter Lauf: {when}",
+  "status.never": "Noch kein Lauf aufgezeichnet",
+  "status.show_history": "Verlauf anzeigen",
+  "status.hide_history": "Verlauf ausblenden",
+  "status.history_title": "Letzte Läufe",
+  "status.col.when": "Wann",
+  "status.col.trigger": "Auslöser",
+  "status.col.changes": "Änderungen",
+  "status.col.duration": "Dauer",
+  "status.trigger.autopilot": "Autopilot",
+  "status.trigger.score_sync": "Score-Datenbank",
+  "status.trigger.score_sync_full": "Kompletter Neuaufbau",
+  "status.trigger.sync": "Synchronisieren",
+  "status.trigger.push": "Auf Plex übertragen",
+  "status.trigger.cleanup": "Poster aufräumen",
+  "status.stat.matched": "Treffer",
+  "status.stat.scores_updated": "Scores aktualisiert",
+  "status.stat.originals_fetched": "Originale geholt",
+  "status.stat.rendered": "gerendert",
+  "status.stat.pushed": "übertragen",
+  "status.stat.orphans_removed": "Leichen entfernt",
+  "status.stat.plex_posters_removed": "alte Poster entfernt",
+  "status.stat.errors": "Fehler",
+  "status.no_changes": "keine Änderungen",
+  "status.failed": "fehlgeschlagen",
+  "status.build": "Build {date}"
 }

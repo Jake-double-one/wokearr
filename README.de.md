@@ -6,7 +6,9 @@ Kleine, lokal gehostete Web-UI im Radarr/Sonarr-Look, die Filme und Serien in
 eurer Plex-Bibliothek mit einer Ampel-Badge (rot/gelb/grün) versieht, basierend
 auf dem Score von [isitwokeornot.com](https://isitwokeornot.com/).
 
-- **Rot** = hoher Score (Warnung), **Gelb** = mittel, **Grün** = niedrig
+- Fünf Stufen, exakt die offiziellen von isitwokeornot.com: **0–19** nicht
+  woke, **20–39** leicht woke, **40–59** woke, **60–79** sehr woke,
+  **80–100** extrem woke. Zwei Farbpaletten zur Auswahl (`BADGE_COLOR_SCHEME`)
 - Matching läuft über die TMDb-ID, die sowohl Plex als auch isitwokeornot.com
   pro Titel führen
 - Bei Serien wird auch jede Staffel gebadged (mit dem Score der Serie, auf dem
@@ -77,6 +79,8 @@ reicht in Portainer **Stacks -> wokearr -> Pull and redeploy** (zieht das
 | `BADGE_POSITION`    | nein    | `top-right`     | `top-right` \| `top-left` \| `bottom-right` \| `bottom-left` |
 | `BADGE_LABEL_STYLE` | nein    | `percent`       | `percent` (`37%`) \| `woke` (`37% woke`) |
 | `BADGE_WIDTH_PERCENT` | nein  | `20`            | Breite der Badge relativ zur Posterbreite, in Prozent. Mindestwert fest bei `20` verankert (kleinere Werte werden automatisch angehoben) |
+| `BADGE_COLOR_SCHEME` | nein  | `standard`      | Palette für die fünf Stufen: `standard` (wie isitwokeornot.com selbst) \| `modified` (grün/gelb/orange/rot/violett) |
+| `RUN_HISTORY_RETENTION` | nein | `4w`         | Aufbewahrung der Protokoll-Einträge: `<Zahl><Einheit>` mit `d`/`w`/`m`, z. B. `3d`, `4w`, `6m`. `0` behält alles |
 | `AUTO_SYNC_CRON` | nein | leer (aus) | Cron-Ausdruck (5 Felder) für den kompletten Autopilot-Lauf (Score-Sync, Poster-Cache, aufräumen, automatisch anwenden). Leer oder `0` deaktiviert. Z. B. `0 * * * *` für stündlich. |
 | `CACHE_REBUILD_COOLDOWN_MINUTES` | nein | `5` | Mindestabstand zwischen zwei Sitemap-Abrufen (manuell oder automatisch) |
 | `CLEANUP_OLD_POSTERS` | nein | `true` | Nach jedem Übertragen automatisch ältere, selbst hochgeladene Poster-Versionen in Plex löschen (siehe unten) |
@@ -85,10 +89,13 @@ reicht in Portainer **Stacks -> wokearr -> Pull and redeploy** (zieht das
 
 Änderungen an Umgebungsvariablen werden erst nach einem **Container-Redeploy**
 übernommen (Portainer: **Update the stack**, nicht nur die Seite neu laden).
-`BADGE_LABEL_STYLE` und `BADGE_WIDTH_PERCENT` wirken sich außerdem nur auf
-Poster aus, die *ab jetzt* neu angewendet werden - Text und Größe sind fest
-ins Bild gebrannt und ändern sich bei schon vorher angewendeten Postern nicht
-rückwirkend von selbst.
+Eine geänderte Badge-Einstellung (`BADGE_COLOR_SCHEME`, `BADGE_POSITION`,
+`BADGE_LABEL_STYLE`, `BADGE_WIDTH_PERCENT`) führt beim nächsten Sync
+automatisch zum Neurendern und erneuten Hochladen der betroffenen Poster –
+die Einstellungen sind fest ins Bild gebrannt, Wokearr merkt sich deshalb,
+mit welchen Einstellungen ein Poster gerendert wurde. Der erste Lauf nach so
+einer Änderung betrifft dadurch die **komplette** Bibliothek inklusive aller
+Staffeln.
 
 ### PLEX_URL richtig setzen
 
@@ -113,7 +120,18 @@ Im Volume `/data` liegen und überstehen Container-Neustarts/-Updates:
 `score_cache.json` (Score-Datenbank), `originals/` (unbebadgte Poster),
 `branded/` (fertig gerenderte Poster, noch nicht zwingend hochgeladen),
 `rendered_state.json`/`pushed_state.json` (merken sich pro Titel, mit
-welchem Score zuletzt gerendert bzw. zu Plex hochgeladen wurde).
+welchem Score und welchen Badge-Einstellungen zuletzt gerendert bzw. zu Plex
+hochgeladen wurde), `run_history.json` (das Protokoll im Footer).
+
+### Lauf-Protokoll
+
+Im Footer steht eine gedämpfte Zeile mit dem letzten Lauf und dem, was er
+geändert hat (gematchte Titel inkl. Differenz, aktualisierte Scores,
+gerenderte/übertragene Poster, entfernte Leichen). Ein Klick klappt die
+letzten Läufe als kompakte Tabelle auf – standardmäßig zu. Protokolliert
+wird jeder Lauf, egal ob vom Autopiloten oder per Button. Wie lange Einträge
+bleiben, steuert `RUN_HISTORY_RETENTION`. Daneben steht die laufende Version,
+bei `latest`-Images zusätzlich das Build-Datum.
 
 ## Autopilot - automatischer Betrieb
 

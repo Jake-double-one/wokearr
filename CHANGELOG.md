@@ -3,7 +3,17 @@
 All notable changes to Wokearr, newest first. Version numbers match the image
 tags on `ghcr.io/jake-double-one/wokearr`.
 
-## [Unreleased]
+## [v0.3.1] – 2026-09-22
+
+### Added
+- **CHANGELOG.md** – this file. The auto-generated release notes were one
+  bullet per pull request, which says little about what actually changed for
+  someone deciding whether to update. Backfilled from v0.1.0 onwards,
+  reconstructed from tags and merge history.
+
+### Changed
+- The version in the footer is now a link: a tagged version points at its
+  release notes, `latest`/`dev` at the repository.
 
 ### Fixed
 - **Review pages without a usable score were re-fetched on every run.** A page
@@ -167,7 +177,7 @@ ready-built image on GHCR for Docker Compose and Portainer.
 Note: the tag `v0.2` points at the same commit as `v0.2.2` – an accidental
 duplicate, not a separate release.
 
-[Unreleased]: https://github.com/Jake-double-one/wokearr/compare/v0.3.0...main
+[v0.3.1]: https://github.com/Jake-double-one/wokearr/compare/v0.3.0...v0.3.1
 [v0.3.0]: https://github.com/Jake-double-one/wokearr/compare/v0.2.5...v0.3.0
 [v0.2.5]: https://github.com/Jake-double-one/wokearr/compare/v0.2.4...v0.2.5
 [v0.2.4]: https://github.com/Jake-double-one/wokearr/compare/v0.2.3...v0.2.4

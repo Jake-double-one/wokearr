@@ -121,7 +121,9 @@ Im Volume `/data` liegen und überstehen Container-Neustarts/-Updates:
 `branded/` (fertig gerenderte Poster, noch nicht zwingend hochgeladen),
 `rendered_state.json`/`pushed_state.json` (merken sich pro Titel, mit
 welchem Score und welchen Badge-Einstellungen zuletzt gerendert bzw. zu Plex
-hochgeladen wurde), `run_history.json` (das Protokoll im Footer).
+hochgeladen wurde), `run_history.json` (das Protokoll im Footer),
+`url_state.json` (pro Review-URL der letzte Abrufversuch - damit Seiten ohne
+verwertbaren Score nicht bei jedem Lauf erneut geholt werden).
 
 ### Lauf-Protokoll
 
@@ -220,7 +222,11 @@ beschränkt, füllt den Plattenplatz des Plex-Servers aber mit der Zeit spürbar
   Seitenaufrufe sind erlaubt, trotzdem bitte fair bleiben (Standard-Delay im
   Cache-Skript nicht auf 0 setzen). Normale (nicht-vollständige) Score-Syncs
   fragen dank `<lastmod>` aus der Sitemap nur neue/geänderte Reviews erneut ab
-  – auf Wunsch des Betreibers, um wiederholte Läufe schlank zu halten. Links
+  – auf Wunsch des Betreibers, um wiederholte Läufe schlank zu halten. Eine
+  Review-Seite ohne verwertbaren Score (kein Review-Block, keine TMDb-ID, ein
+  HTTP-Fehler) wird als solche gemerkt und erst wieder abgefragt, wenn die
+  Sitemap eine Änderung meldet – frühestens aber nach einer Woche. Sonst
+  würde sie bei jedem Lauf erneut als „neu" gelten. Links
   zu den Review-Seiten in der UI tragen UTM-Parameter (`utm_source=wokearr`),
   damit isitwokeornot.com sehen kann, wie viel Traffic Wokearr ihnen zuführt.
 - Dieses Projekt ist ein privates Hobby-Tool ohne Zusammenhang mit

@@ -3,6 +3,28 @@
 All notable changes to Wokearr, newest first. Version numbers match the image
 tags on `ghcr.io/jake-double-one/wokearr`.
 
+## [Unreleased]
+
+### Fixed
+- **Review pages without a usable score were re-fetched on every run.** A page
+  that yields no score (no `Review` block, no TMDb ID, an HTTP error, or a
+  second review page for a TMDb ID already in the cache) never lands in the
+  score cache, so the incremental sync kept treating it as a new title -
+  indefinitely, once per run. Each attempt is now recorded per URL in
+  `url_state.json`, and such a URL is only retried when the sitemap reports a
+  change, or after a week at the earliest. Nothing to do on upgrade: the first
+  run after it still fetches those URLs once, then leaves them alone.
+- **The run protocol counted posters as "rendered" that weren't.** The render
+  filter still compared against the bare score while the state file stores
+  score *and* badge settings, so every title entered the render list on every
+  run. The renderer itself correctly skipped them, but the counter went up
+  anyway - a library-sized "rendered" number on runs that changed nothing.
+- Two review pages claiming the same TMDb ID now resolve deterministically
+  (by URL order) instead of depending on which request happened to finish
+  first.
+- A branded poster deleted from `/data/branded` is rendered again on the next
+  sync, instead of being skipped because the state file still listed it.
+
 ## [v0.3.0] – 2026-09-19
 
 ### Added
@@ -145,6 +167,7 @@ ready-built image on GHCR for Docker Compose and Portainer.
 Note: the tag `v0.2` points at the same commit as `v0.2.2` – an accidental
 duplicate, not a separate release.
 
+[Unreleased]: https://github.com/Jake-double-one/wokearr/compare/v0.3.0...main
 [v0.3.0]: https://github.com/Jake-double-one/wokearr/compare/v0.2.5...v0.3.0
 [v0.2.5]: https://github.com/Jake-double-one/wokearr/compare/v0.2.4...v0.2.5
 [v0.2.4]: https://github.com/Jake-double-one/wokearr/compare/v0.2.3...v0.2.4

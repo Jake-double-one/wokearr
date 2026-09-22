@@ -119,7 +119,9 @@ The `/data` volume holds and survives container restarts/updates:
 `branded/` (fully rendered posters, not necessarily uploaded yet),
 `rendered_state.json`/`pushed_state.json` (track, per title, which score and
 badge settings were last rendered and last uploaded to Plex),
-`run_history.json` (the run protocol shown in the footer).
+`run_history.json` (the run protocol shown in the footer),
+`url_state.json` (per review URL, the last fetch attempt - so pages that
+yield no usable score aren't re-fetched on every run).
 
 ### Run protocol
 
@@ -212,7 +214,11 @@ pushing the same title multiple times, e.g. while testing).
   allowed, but please stay fair anyway (don't set the cache script's default
   delay to 0). Normal (non-full) score syncs only re-fetch new/changed
   reviews thanks to the sitemap's `<lastmod>` - at the operator's request, to
-  keep repeated runs lean. Links to review pages in the UI carry UTM
+  keep repeated runs lean. A review page that yields no usable score (no
+  Review block, no TMDb ID, an HTTP error) is remembered as such and only
+  retried once the sitemap reports a change, or after a week at the earliest -
+  otherwise it would count as "new" and be re-fetched on every single run.
+  Links to review pages in the UI carry UTM
   parameters (`utm_source=wokearr`), so isitwokeornot.com can see how much
   traffic Wokearr sends them.
 - This project is a private hobby tool with no affiliation to

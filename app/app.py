@@ -653,7 +653,11 @@ def sync_library(log=None) -> dict:
     rendered_state = _load_state_file(RENDERED_STATE_FILE)
     to_render = [
         (item, entry) for rk, item, entry in titled_entries
-        if (ORIGINALS_DIR / f"{rk}.jpg").exists() and rendered_state.get(rk) != entry["score"]
+        if (ORIGINALS_DIR / f"{rk}.jpg").exists()
+        and (
+            rendered_state.get(rk) != _state_value(entry["score"])
+            or not (BRANDED_DIR / f"{rk}.jpg").exists()
+        )
     ]
     rendered = 0
     for item, entry in to_render:

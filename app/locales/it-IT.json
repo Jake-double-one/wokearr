@@ -102,5 +102,17 @@
   "notify.title_changes": "Wokearr: modifiche",
   "notify.new_titles": "Nuovi badge: {titles}",
   "notify.score_changes": "Punteggi cambiati: {changes}",
-  "notify.more": "e altri {count}"
+  "notify.more": "e altri {count}",
+  "login.title": "Accedi",
+  "login.username": "Nome utente",
+  "login.password": "Password",
+  "login.remember": "Resta connesso",
+  "login.submit": "Accedi",
+  "login.error_invalid": "Nome utente o password errati.",
+  "login.error_locked": "Troppi tentativi falliti. Riprova tra {minutes} min.",
+  "auth.logout": "Esci",
+  "auth.required": "Accesso richiesto.",
+  "auth.csrf": "Richiesta rifiutata: intestazione di sicurezza mancante. Ricarica la pagina.",
+  "auth.config_error_title": "Accesso configurato in modo errato",
+  "auth.config_error_hint": "Wokearr resta bloccato finché non viene corretto nelle variabili d'ambiente e il container non viene ridistribuito."
 }

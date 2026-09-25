@@ -30,6 +30,10 @@ services:
       RUN_HISTORY_RETENTION: "${RUN_HISTORY_RETENTION:-4w}"
       CLEANUP_OLD_POSTERS: "${CLEANUP_OLD_POSTERS:-true}"
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      # Optional login: none | basic | forms - see README "Authentication"
+      AUTH_METHOD: "${AUTH_METHOD:-none}"
+      AUTH_USERNAME: "${AUTH_USERNAME:-}"
+      AUTH_PASSWORD: "${AUTH_PASSWORD:-}"
       # e.g. gotifys://gotify.example.com/APP_TOKEN - see README
       NOTIFY_URL: "${NOTIFY_URL:-}"
       NOTIFY_ON: "${NOTIFY_ON:-error,changes}"

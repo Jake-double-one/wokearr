@@ -67,6 +67,9 @@
     </button>
     <span class="status-next" id="status-next-run" hidden></span>
     <span class="status-version" id="status-version"></span>
+    {%- if show_logout %}
+    <a class="status-logout" href="{{ url_for('logout') }}">{{ t('auth.logout') }}</a>
+    {%- endif %}
   </div>
   <div id="status-history" class="status-history" hidden></div>
   <div class="footer-credits">
@@ -85,6 +88,7 @@
   window.__BADGE_LABEL_STYLE__ = {{ badge_label_style | tojson }};
   window.__I18N__ = {{ i18n | tojson }};
   window.__LANGUAGE__ = {{ language | tojson }};
+  window.__AUTH_METHOD__ = {{ auth_method | tojson }};
 </script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>

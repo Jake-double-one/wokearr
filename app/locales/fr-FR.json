@@ -102,5 +102,17 @@
   "notify.title_changes": "Wokearr : changements",
   "notify.new_titles": "Nouveaux badges : {titles}",
   "notify.score_changes": "Scores modifiés : {changes}",
-  "notify.more": "et {count} de plus"
+  "notify.more": "et {count} de plus",
+  "login.title": "Connexion",
+  "login.username": "Nom d'utilisateur",
+  "login.password": "Mot de passe",
+  "login.remember": "Rester connecté",
+  "login.submit": "Se connecter",
+  "login.error_invalid": "Nom d'utilisateur ou mot de passe incorrect.",
+  "login.error_locked": "Trop de tentatives échouées. Réessayez dans {minutes} min.",
+  "auth.logout": "Se déconnecter",
+  "auth.required": "Connexion requise.",
+  "auth.csrf": "Requête refusée : en-tête de sécurité manquant. Veuillez recharger la page.",
+  "auth.config_error_title": "Connexion mal configurée",
+  "auth.config_error_hint": "Wokearr reste verrouillé tant que ce n'est pas corrigé dans les variables d'environnement et que le conteneur n'est pas redéployé."
 }

@@ -34,6 +34,7 @@ from badge import (  # noqa: E402
     DEFAULT_COLOR_SCHEME,
 )
 from logsetup import setup_logging, get_logger
+from auth import Auth
 import build_score_cache as bsc
 import notify
 
@@ -243,6 +244,9 @@ RUN_HISTORY_MAX_ENTRIES = 500
 
 app = Flask(__name__)
 app.jinja_env.globals["t"] = t
+app.jinja_env.globals["language"] = LANGUAGE
+# Optional login (AUTH_METHOD none/basic/forms) - see auth.py
+auth = Auth(app, DATA_DIR, t)
 JOBS = {}  # job_id -> {"state": "running"/"done"/"error", "progress": [n, total], "log": [...]}
 
 _rebuild_lock = threading.Lock()
@@ -1219,6 +1223,7 @@ def _log_startup() -> None:
         log_config.info("Notifications: %s, on: %s", NOTIFY_TARGET.display, ", ".join(sorted(NOTIFY_ON)))
     else:
         log_config.info("Notifications: disabled (NOTIFY_URL not set)")
+    auth.log_startup()
 
 
 def _tz_is_known(name: str) -> bool:
@@ -1246,17 +1251,28 @@ def index():
         bands=BAND_KEYS,
         band_styles=band_styles(),
         band_max=dict(zip(BAND_KEYS, BAND_MAX)),
+        # Only forms has a session to end - basic can't log out, the browser keeps the login
+        show_logout=auth.active and auth.method == "forms",
+        auth_method=auth.method if auth.active else "none",
     )
 
 
 @app.route("/healthz")
 def healthz():
-    return jsonify({
+    """Always reachable without login (Docker's health check). Reports a
+    misconfigured login as unhealthy, so it shows up in Portainer instead of
+    only as a locked page."""
+    body = {
         "status": "ok",
         "demo_mode": demo_mode(),
         "version": APP_VERSION,
         "build_date": BUILD_DATE or None,
-    })
+        "auth": auth.method if not auth.error else "misconfigured",
+    }
+    if auth.error:
+        body["status"] = "error"
+        return jsonify(body), 503
+    return jsonify(body)
 
 
 @app.route("/api/status")

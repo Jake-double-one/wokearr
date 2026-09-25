@@ -3,6 +3,28 @@
 All notable changes to Wokearr, newest first. Version numbers match the image
 tags on `ghcr.io/jake-double-one/wokearr`.
 
+## [Unreleased]
+
+### Added
+- **Optional login**, like Radarr and Sonarr, via `AUTH_METHOD`:
+  - `none` (default) – no login, nothing changes for existing setups.
+  - `basic` – the browser's login popup, e.g. for authentik's "Send
+    HTTP-Basic Authentication". Radarr dropped Basic in v6, so this is where
+    that setup still works.
+  - `forms` – a login page like Radarr's, with "Remember me" (30 days) and a
+    logout link.
+
+  Both share one login from `AUTH_USERNAME` and `AUTH_PASSWORD` (or
+  `AUTH_PASSWORD_FILE` for Docker secrets).
+- A misconfigured login fails closed: Wokearr stays locked and names the
+  reason instead of falling back to no login, and `/healthz` reports it as
+  unhealthy.
+- Failed logins are rate-limited per address (5 per 15 minutes) and logged in
+  a fail2ban/CrowdSec-friendly form. Requests that change something need a
+  header only the UI sends (CSRF protection). The `forms` session cookie is
+  HttpOnly, SameSite=Lax, Secure over HTTPS, and ends when the password
+  changes.
+
 ## [v0.3.2] – 2026-09-25
 
 ### Added
@@ -237,6 +259,7 @@ ready-built image on GHCR for Docker Compose and Portainer.
 Note: the tag `v0.2` points at the same commit as `v0.2.2` – an accidental
 duplicate, not a separate release.
 
+[Unreleased]: https://github.com/Jake-double-one/wokearr/compare/v0.3.2...main
 [v0.3.2]: https://github.com/Jake-double-one/wokearr/compare/v0.3.1...v0.3.2
 [v0.3.1]: https://github.com/Jake-double-one/wokearr/compare/v0.3.0...v0.3.1
 [v0.3.0]: https://github.com/Jake-double-one/wokearr/compare/v0.2.5...v0.3.0

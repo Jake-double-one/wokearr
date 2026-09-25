@@ -19,6 +19,8 @@ services:
       PLEX_TOKEN: "${PLEX_TOKEN:-}"
       LIBRARY_SECTIONS: "${LIBRARY_SECTIONS:-Filme,Serien}"
       LANGUAGE: "${LANGUAGE:-en-US}"
+      # Time zone for log times AND the AUTO_SYNC_CRON schedule, e.g. Europe/Berlin
+      TZ: "${TZ:-Etc/UTC}"
       BADGE_POSITION: "${BADGE_POSITION:-top-right}"
       BADGE_LABEL_STYLE: "${BADGE_LABEL_STYLE:-percent}"
       BADGE_WIDTH_PERCENT: "${BADGE_WIDTH_PERCENT:-20}"
@@ -27,6 +29,10 @@ services:
       CACHE_REBUILD_COOLDOWN_MINUTES: "${CACHE_REBUILD_COOLDOWN_MINUTES:-5}"
       RUN_HISTORY_RETENTION: "${RUN_HISTORY_RETENTION:-4w}"
       CLEANUP_OLD_POSTERS: "${CLEANUP_OLD_POSTERS:-true}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      # e.g. gotifys://gotify.example.com/APP_TOKEN - see README
+      NOTIFY_URL: "${NOTIFY_URL:-}"
+      NOTIFY_ON: "${NOTIFY_ON:-error,changes}"
     volumes:
       - woke-score-data:/data
 

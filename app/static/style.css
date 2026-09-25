@@ -95,6 +95,25 @@ body {
 .chip.chip-active { color: var(--text); border-color: var(--accent); }
 .chip .count { color: var(--muted); font-variant-numeric: tabular-nums; }
 
+/* Sorting: right end of the filter bar, same quiet look as the chips */
+.sort-control { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.sort-field,
+.sort-dir {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.sort-field { padding: 5px 10px; }
+.sort-dir { width: 30px; height: 28px; padding: 0; font-size: 14px; line-height: 1; }
+.sort-field:hover,
+.sort-dir:hover,
+.sort-field:focus-visible,
+.sort-dir:focus-visible { color: var(--text); border-color: var(--accent); outline: none; }
+
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .dot-not-woke { background: var(--band-not-woke); }
 .dot-slightly-woke { background: var(--band-slightly-woke); }
@@ -224,6 +243,8 @@ main { padding: 20px; }
   border-bottom: 1px dotted var(--border);
 }
 .status-summary:hover { color: var(--text); }
+.status-summary .status-error { color: var(--red); }
+.status-next { color: var(--muted); opacity: 0.75; font-variant-numeric: tabular-nums; }
 .status-version { color: var(--muted); opacity: 0.75; font-variant-numeric: tabular-nums; }
 .status-version a { color: inherit; text-decoration: underline dotted; }
 .status-version a:hover { color: var(--text); }
@@ -245,6 +266,14 @@ main { padding: 20px; }
 .status-history td { color: var(--text); }
 .status-history td.status-changes { white-space: normal; color: var(--muted); }
 .status-history .status-error { color: var(--red); }
+/* Expandable details behind a run: changed titles, raw error messages */
+.run-details summary { cursor: pointer; list-style: none; -webkit-tap-highlight-color: transparent; }
+.run-details summary:focus-visible { outline: 1px dotted var(--muted); outline-offset: 2px; }
+.run-details summary::-webkit-details-marker { display: none; }
+.run-details summary::after { content: " ▸"; opacity: 0.6; }
+.run-details[open] summary::after { content: " ▾"; }
+.run-details ul { margin: 4px 0 2px; padding-left: 16px; color: var(--muted); overflow-wrap: anywhere; }
+.run-details li { margin: 2px 0; }
 .footer-credits { line-height: 1.5; }
 
 .toast {
@@ -272,6 +301,7 @@ main { padding: 20px; }
   .action-group-secondary .btn { flex: 0 1 auto; }
 
   .filterbar { padding: 10px 14px; flex-wrap: wrap; }
+  .sort-control { margin-left: 0; }
 
   main { padding: 12px; }
 
@@ -290,4 +320,9 @@ main { padding: 20px; }
   .toast { left: 12px; right: 12px; bottom: 12px; transform: none; min-width: 0; }
 
   .app-footer { padding: 12px 14px 20px; font-size: 11px; }
+  /* Protocol table: tighter cells, and the trigger may wrap, so all four
+     columns fit a phone screen without sideways scrolling */
+  .status-history th,
+  .status-history td { padding: 5px 4px; }
+  .status-history td:nth-child(2) { white-space: normal; }
 }

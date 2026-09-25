@@ -9,6 +9,7 @@ so the image can be published to GitHub/Docker Hub without any code changes.
 import datetime
 import io
 import json
+import logging
 import re
 import os
 import sys
@@ -32,6 +33,21 @@ from badge import (  # noqa: E402
     COLOR_SCHEMES,
     DEFAULT_COLOR_SCHEME,
 )
+from logsetup import setup_logging, get_logger
+import build_score_cache as bsc
+import notify
+
+setup_logging()
+log_config = get_logger("config")
+log_i18n = get_logger("i18n")
+log_run = get_logger("run")
+log_score = get_logger("score-sync")
+log_plex = get_logger("plex-sync")
+log_push = get_logger("push")
+log_cleanup = get_logger("cleanup")
+log_autopilot = get_logger("autopilot")
+log_history = get_logger("history")
+log_notify = get_logger("notify")
 
 # ---------------------------------------------------------------------------
 # CONFIG - comes from environment variables (see .env.example / docker-compose.yaml)
@@ -58,8 +74,8 @@ BADGE_WIDTH_PERCENT = max(BADGE_WIDTH_PERCENT, BADGE_WIDTH_MIN_PERCENT)
 # green -> yellow -> orange -> red -> violet ramp (see badge.COLOR_SCHEMES).
 BADGE_COLOR_SCHEME = os.environ.get("BADGE_COLOR_SCHEME", DEFAULT_COLOR_SCHEME).strip().lower()
 if BADGE_COLOR_SCHEME not in COLOR_SCHEMES:
-    print(f"[config] Unknown BADGE_COLOR_SCHEME={BADGE_COLOR_SCHEME!r}, falling back to "
-          f"{DEFAULT_COLOR_SCHEME!r}. Available: {', '.join(sorted(COLOR_SCHEMES))}.", flush=True)
+    log_config.warning("Unknown BADGE_COLOR_SCHEME=%r, falling back to %r. Available: %s.",
+                       BADGE_COLOR_SCHEME, DEFAULT_COLOR_SCHEME, ", ".join(sorted(COLOR_SCHEMES)))
     BADGE_COLOR_SCHEME = DEFAULT_COLOR_SCHEME
 
 # Version/build info, injected as build args by the GitHub Action (see
@@ -90,8 +106,8 @@ def _parse_retention_days(raw: str) -> int:
         return 0
     match = re.fullmatch(r"(\d+)\s*([dwm])", value)
     if not match:
-        print(f"[config] Unparseable RUN_HISTORY_RETENTION={raw!r}, using "
-              f"{RUN_HISTORY_RETENTION_DEFAULT!r}. Expected e.g. 3d, 2w, 6m.", flush=True)
+        log_config.warning("Unparseable RUN_HISTORY_RETENTION=%r, using %r. Expected e.g. 3d, 2w, 6m.",
+                           raw, RUN_HISTORY_RETENTION_DEFAULT)
         return _parse_retention_days(RUN_HISTORY_RETENTION_DEFAULT)
     return int(match.group(1)) * _RETENTION_UNIT_DAYS[match.group(2)]
 
@@ -117,8 +133,7 @@ def _load_locale(lang: str) -> dict:
 
 _FALLBACK_TRANSLATIONS = _load_locale(DEFAULT_LANGUAGE)
 if LANGUAGE != DEFAULT_LANGUAGE and not (LOCALES_DIR / f"{LANGUAGE}.json").exists():
-    print(f"[i18n] No locale file found for LANGUAGE={LANGUAGE!r}, falling back to {DEFAULT_LANGUAGE}.",
-          flush=True)
+    log_i18n.warning("No locale file found for LANGUAGE=%r, falling back to %s.", LANGUAGE, DEFAULT_LANGUAGE)
     # Fall LANGUAGE itself back too (not just individual keys) - otherwise
     # e.g. <html lang="fr"> would show on text that's actually all English.
     LANGUAGE = DEFAULT_LANGUAGE
@@ -127,8 +142,8 @@ if LANGUAGE != DEFAULT_LANGUAGE and not (LOCALES_DIR / f"{LANGUAGE}.json").exist
 TRANSLATIONS = {**_FALLBACK_TRANSLATIONS, **_load_locale(LANGUAGE)}
 
 
-def t(key: str, **kwargs) -> str:
-    template = TRANSLATIONS.get(key, key)
+def _format(translations: dict, key: str, **kwargs) -> str:
+    template = translations.get(key, key)
     if not kwargs:
         return template
     try:
@@ -137,6 +152,17 @@ def t(key: str, **kwargs) -> str:
         # A broken/inconsistent translation template must never crash a
         # request - show it unformatted rather than fail.
         return template
+
+
+def t(key: str, **kwargs) -> str:
+    return _format(TRANSLATIONS, key, **kwargs)
+
+
+def t_log(key: str, **kwargs) -> str:
+    """Same text in English, for the container log: one language there no
+    matter what the UI is set to, so logs stay greppable and can be shared
+    in an issue as-is."""
+    return _format(_FALLBACK_TRANSLATIONS, key, **kwargs)
 
 # Plex keeps the previous version of every uploaded poster as poster history
 # and never deletes it on its own - otherwise the Plex server just keeps
@@ -160,13 +186,30 @@ AUTO_SYNC_CRON = os.environ.get("AUTO_SYNC_CRON", "").strip()
 if AUTO_SYNC_CRON in ("", "0"):
     AUTO_SYNC_CRON = None
 elif not croniter.is_valid(AUTO_SYNC_CRON):
-    print(f"[auto-sync] Invalid AUTO_SYNC_CRON={AUTO_SYNC_CRON!r} (not a valid 5-field cron "
-          f"expression) - autopilot disabled.", flush=True)
+    log_config.error("Invalid AUTO_SYNC_CRON=%r (not a valid 5-field cron expression) - autopilot disabled.",
+                     AUTO_SYNC_CRON)
     AUTO_SYNC_CRON = None
 # Minimum gap between two sitemap fetches (manual or automatic), so
 # isitwokeornot.com isn't overloaded by spam clicks or a too-tight cron
 # schedule.
 CACHE_REBUILD_COOLDOWN_SECONDS = int(os.environ.get("CACHE_REBUILD_COOLDOWN_MINUTES", "5") or "5") * 60
+
+# Notifications for autopilot runs (see notify.py for the URL formats):
+# NOTIFY_URL is where to, NOTIFY_ON what for - "error" (a stage failed)
+# and/or "changes" (new titles badged, scores of your titles changed).
+NOTIFY_TARGET = None
+_notify_url = os.environ.get("NOTIFY_URL", "").strip()
+if _notify_url:
+    try:
+        NOTIFY_TARGET = notify.parse_url(_notify_url)
+    except ValueError as e:
+        log_config.error("Invalid NOTIFY_URL - notifications disabled: %s", e)
+NOTIFY_ON_CHOICES = {"error", "changes"}
+NOTIFY_ON = {v.strip().lower() for v in os.environ.get("NOTIFY_ON", "error,changes").split(",") if v.strip()}
+if NOTIFY_ON - NOTIFY_ON_CHOICES:
+    log_config.warning("Unknown NOTIFY_ON value(s) %s ignored. Available: error, changes.",
+                       ", ".join(sorted(NOTIFY_ON - NOTIFY_ON_CHOICES)))
+    NOTIFY_ON &= NOTIFY_ON_CHOICES
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent / "data")))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -187,6 +230,10 @@ BRANDED_DIR.mkdir(parents=True, exist_ok=True)
 # (see _badge_fingerprint), so a changed badge setting also takes effect.
 RENDERED_STATE_FILE = DATA_DIR / "rendered_state.json"
 PUSHED_STATE_FILE = DATA_DIR / "pushed_state.json"
+# Every title in the Plex library as a cache key ("movie:123"), scored or not -
+# written by the Plex comparison, read by the score sync to tell which score
+# changes concern your own library (see _report_score_changes).
+LIBRARY_INDEX_FILE = DATA_DIR / "library_index.json"
 # Protocol of the last runs, shown in the footer (see _record_run).
 RUN_HISTORY_FILE = DATA_DIR / "run_history.json"
 # Hard cap, independent of RUN_HISTORY_RETENTION - a safety net so a very
@@ -200,6 +247,7 @@ JOBS = {}  # job_id -> {"state": "running"/"done"/"error", "progress": [n, total
 
 _rebuild_lock = threading.Lock()
 _last_rebuild_started = 0.0  # epoch seconds - protects isitwokeornot.com from too-frequent fetches
+_previous_rebuild_started = 0.0  # restored by _release_rebuild_slot when a sitemap fetch fails
 _state_lock = threading.Lock()
 
 PLEX_TYPE_TO_CACHE_PREFIX = {"movie": "movie", "show": "tv"}
@@ -346,30 +394,30 @@ def cleanup_old_uploaded_posters(plex, item) -> int:
     existed. A deletion attempt on an agent poster (e.g. TMDb) can't happen
     at all thanks to the key check.
 
-    Logs every candidate along with the decision/result to stdout (visible
-    in the container logs).
+    Logs every deletion to the container log; the candidates that are kept
+    only at LOG_LEVEL=DEBUG.
     """
     removed = 0
     try:
         candidates = list(item.posters())
     except Exception as e:
-        print(f"[cleanup] {_display_title(item)}: item.posters() failed: {e}", flush=True)
+        log_cleanup.warning("%s: listing posters failed: %s", _display_title(item), _describe(e))
         return 0
 
     for p in candidates:
         key = getattr(p, "key", "?")
         if getattr(p, "selected", False):
-            print(f"[cleanup] {_display_title(item)}: skipped (currently selected) - {key}", flush=True)
+            log_cleanup.debug("%s: kept (currently selected) - %s", _display_title(item), key)
             continue
         if not _is_upload_poster(p):
-            print(f"[cleanup] {_display_title(item)}: skipped (agent poster) - {key}", flush=True)
+            log_cleanup.debug("%s: kept (agent poster) - %s", _display_title(item), key)
             continue
         try:
             p.delete()
             removed += 1
-            print(f"[cleanup] {_display_title(item)}: deleted - {key}", flush=True)
+            log_cleanup.info("%s: deleted old upload - %s", _display_title(item), key)
         except Exception as e:
-            print(f"[cleanup] {_display_title(item)}: delete failed ({e}) - {key}", flush=True)
+            log_cleanup.warning("%s: deleting old upload failed: %s - %s", _display_title(item), _describe(e), key)
     return removed
 
 
@@ -453,9 +501,39 @@ def load_runs() -> list:
         return []
 
 
-def _record_run(trigger: str, started: datetime.datetime, stats: dict) -> None:
-    """Appends one run to the protocol. Best-effort: a broken protocol file
-    must never abort the actual sync."""
+# Stat keys in the order they're summarized in the container log's
+# "Finished" line (the UI has its own copy in app.js).
+_RUN_SUMMARY_STATS = (
+    "matched", "scores_updated", "originals_fetched", "rendered",
+    "pushed", "orphans_removed", "plex_posters_removed",
+)
+# Caps for the per-run detail lists, so one unusual run (e.g. the first sync
+# of a big library) can't bloat the protocol file.
+RUN_DETAIL_LIST_MAX = 50
+
+
+def _run_started(trigger: str) -> datetime.datetime:
+    log_run.info("Started: %s", t_log(f"status.trigger.{trigger}"))
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
+def _run_summary(entry: dict) -> str:
+    parts = [f"{entry[key]} {t_log(f'status.stat.{key}')}" for key in _RUN_SUMMARY_STATS if entry.get(key)]
+    if entry.get("score_changes"):
+        parts.append(f"{len(entry['score_changes'])} {t_log('status.stat.score_changes')}")
+    if entry.get("push_failed"):
+        parts.append(f"{entry['push_failed']} {t_log('status.stat.errors')}")
+    return ", ".join(parts) or t_log("status.no_changes")
+
+
+def _record_run(trigger: str, started: datetime.datetime, stats: dict, errors: list | None = None) -> dict:
+    """Appends one run to the protocol and writes its "Finished" line to the
+    container log. Best-effort: a broken protocol file must never abort the
+    actual sync.
+
+    errors holds one record per failed stage (see _error_record). "error":
+    True is kept alongside for protocol entries written before errors
+    existed - the frontend reads both."""
     finished = datetime.datetime.now(datetime.timezone.utc)
     entry = {
         "trigger": trigger,
@@ -463,12 +541,103 @@ def _record_run(trigger: str, started: datetime.datetime, stats: dict) -> None:
         "duration_seconds": round((finished - started).total_seconds(), 1),
         **{k: v for k, v in stats.items() if v is not None},
     }
+    for key in ("score_changes", "new_titles", "missing_originals"):
+        if isinstance(entry.get(key), list):
+            entry[key] = entry[key][:RUN_DETAIL_LIST_MAX]
+    if errors:
+        entry["errors"] = errors
+        entry["error"] = True
+
+    label = t_log(f"status.trigger.{trigger}")
+    if errors:
+        log_run.warning("Finished with errors: %s in %.1fs - %s; %s", label, entry["duration_seconds"],
+                        _run_summary(entry), "; ".join(_error_summary(e, t_log) for e in errors))
+    else:
+        log_run.info("Finished: %s in %.1fs - %s", label, entry["duration_seconds"], _run_summary(entry))
+
     try:
         with _state_lock:
             runs = _prune_runs(load_runs() + [entry])
             RUN_HISTORY_FILE.write_text(json.dumps(runs, indent=2, ensure_ascii=False), encoding="utf-8")
     except Exception as e:
-        print(f"[history] Could not write run protocol: {e}", flush=True)
+        log_history.exception("Could not write run protocol: %s", e)
+    return entry
+
+
+def _describe(exc: BaseException) -> str:
+    """'ReadTimeout: ...' - exception type plus message, since the message
+    alone is often ambiguous (sometimes just a URL, sometimes empty)."""
+    text = f"{type(exc).__name__}: {exc}"
+    cause = exc.__cause__
+    if cause is not None and cause is not exc:
+        text += f" (caused by {type(cause).__name__}: {cause})"
+    return text
+
+
+def _root_error(exc: BaseException) -> BaseException:
+    """First exception in the cause chain that says what actually went wrong
+    on the wire - a requests or plexapi error - else exc itself. Our own
+    wrappers (e.g. build_score_cache.SitemapError) sit on top of those."""
+    seen = set()
+    current = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, requests.RequestException) or type(current).__module__.startswith("plexapi"):
+            return current
+        current = current.__cause__ or current.__context__
+    return exc
+
+
+# Who a stage talks to - the fallback when an error doesn't carry a URL.
+_STAGE_DEFAULT_TARGET = {"score_sync": "isitwokeornot.com", "sync": "Plex", "push": "Plex", "cleanup": "Plex"}
+
+
+def _error_target(err: BaseException, stage: str) -> str:
+    request_obj = getattr(err, "request", None)
+    url = getattr(request_obj, "url", None) if request_obj is not None else None
+    host = urlsplit(url).hostname if url else None
+    plex_host = urlsplit(PLEX_URL).hostname if PLEX_URL else None
+    if host and host == plex_host:
+        return "Plex"
+    if host:
+        return host
+    if type(err).__module__.startswith("plexapi"):
+        return "Plex"
+    return _STAGE_DEFAULT_TARGET.get(stage, "?")
+
+
+def _error_record(stage: str, exc: BaseException) -> dict:
+    """What the protocol and a notification get about a failed stage: a
+    coarse kind the UI can put into words in any language, what couldn't be
+    reached, and the raw message for whoever needs the details."""
+    err = _root_error(exc)
+    status = None
+    if isinstance(err, requests.Timeout):
+        kind = "timeout"
+    elif isinstance(err, requests.ConnectionError):
+        kind = "connection"
+    elif isinstance(err, requests.HTTPError):
+        kind = "http"
+        status = getattr(getattr(err, "response", None), "status_code", None)
+    elif type(err).__module__.startswith("plexapi"):
+        kind = "plex_auth" if type(err).__name__ == "Unauthorized" else "plex"
+    else:
+        kind = "other"
+    return {
+        "stage": stage,
+        "kind": kind,
+        "target": _error_target(err, stage),
+        "status": status,
+        "message": _describe(exc)[:500],
+    }
+
+
+def _error_summary(record: dict, translate=None) -> str:
+    """'Score database failed: isitwokeornot.com not responding (timeout)'."""
+    translate = translate or t
+    reason = translate(f"error.{record.get('kind', 'other')}",
+                       target=record.get("target") or "?", status=record.get("status") or "?")
+    return translate("status.stage_failed", stage=translate(f"status.trigger.{record.get('stage')}"), reason=reason)
 
 
 def render_branded_image(item, entry: dict, force: bool = False) -> Path:
@@ -506,7 +675,7 @@ def render_branded_image(item, entry: dict, force: bool = False) -> Path:
     return branded_path
 
 
-def push_to_plex(plex, item, entry: dict, force: bool = False) -> str:
+def push_to_plex(plex, item, entry: dict, force: bool = False) -> None:
     """
     Uploads the locally branded poster (see render_branded_image, rendered
     on demand if needed) to Plex and afterwards (if enabled) cleans up old
@@ -518,24 +687,44 @@ def push_to_plex(plex, item, entry: dict, force: bool = False) -> str:
     if CLEANUP_OLD_POSTERS:
         cleanup_old_uploaded_posters(plex, item)
     _record_state(PUSHED_STATE_FILE, item.ratingKey, _state_value(entry["score"]))
-    return t("push.ok", title=_display_title(item))
 
 
 def _current_library_items(plex) -> dict:
     """Returns {ratingKey: (plex_item, cache_prefix)} for all configured
-    libraries - the basis for the Plex comparison in the autopilot."""
+    libraries - the basis for the Plex comparison in the autopilot.
+
+    A library name Plex doesn't know is logged along with the names it does
+    know - a typo in LIBRARY_SECTIONS otherwise just looks like an empty
+    library. Connection problems are raised instead of skipped: silently
+    treating an unreachable Plex as "no titles" would make the orphan cleanup
+    delete every cached poster."""
     items = {}
     for section_name in LIBRARY_SECTIONS:
         try:
             section = plex.library.section(section_name)
-        except Exception:
+        except requests.RequestException:
+            raise
+        except Exception as e:
+            log_plex.warning("Library %r not found in Plex (%s) - check LIBRARY_SECTIONS. Libraries in Plex: %s",
+                             section_name, _describe(e), _plex_section_names(plex))
             continue
         prefix = PLEX_TYPE_TO_CACHE_PREFIX.get(section.type)
         if not prefix:
+            log_plex.warning("Library %r is of type %r - only movie and show libraries are supported, skipping it.",
+                             section_name, section.type)
             continue
-        for it in section.all():
+        section_items = section.all()
+        log_plex.debug("Library %r: %d titles", section_name, len(section_items))
+        for it in section_items:
             items[str(it.ratingKey)] = (it, prefix)
     return items
+
+
+def _plex_section_names(plex) -> str:
+    try:
+        return ", ".join(repr(s.title) for s in plex.library.sections()) or "none"
+    except Exception:
+        return "unknown"
 
 
 def _seasons_for_show(item) -> list:
@@ -550,7 +739,7 @@ def _seasons_for_show(item) -> list:
     try:
         return list(item.seasons())
     except Exception as e:
-        print(f"[seasons] {item.title}: item.seasons() failed: {e}", flush=True)
+        log_plex.warning("%s: listing seasons failed, skipping them this run: %s", item.title, _describe(e))
         return []
 
 
@@ -561,31 +750,82 @@ def _display_title(item) -> str:
     return f"{parent_title} – {item.title}" if parent_title else item.title
 
 
-def _emit(log, msg, prefix="sync"):
-    print(f"[{prefix}] {msg}", flush=True)
+def _emit(log, logger, key: str, level: int = logging.INFO, **kwargs) -> None:
+    """One message, two audiences: the job log shown in the browser gets it
+    in the UI language, the container log in English (see t_log)."""
+    logger.log(level, t_log(key, **kwargs))
     if log:
-        log(msg)
+        log(t(key, **kwargs))
 
 
-def score_sync(log=None) -> dict:
-    """Stage 1: incremental score sync against isitwokeornot.com. Triggered
-    standalone via the "Update Score Database" button or as part of the
-    autopilot. Returns stats for the run protocol (see _record_run)."""
-    wait = _reserve_rebuild_slot()
-    if wait:
-        _emit(log, t("score_sync.cooldown", seconds=int(wait)))
-        return {"skipped_cooldown": True}
-    import build_score_cache as bsc
+def _save_cache(cache: dict) -> None:
+    CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _load_library_index() -> set:
+    try:
+        return set(json.loads(LIBRARY_INDEX_FILE.read_text(encoding="utf-8")))
+    except (OSError, ValueError, TypeError):
+        return set()
+
+
+def _save_library_index(keys: set) -> None:
+    try:
+        LIBRARY_INDEX_FILE.write_text(json.dumps(sorted(keys)), encoding="utf-8")
+    except OSError as e:
+        log_plex.warning("Could not write %s: %s", LIBRARY_INDEX_FILE.name, e)
+
+
+def _report_score_changes(changes: list) -> list:
+    """Logs every score isitwokeornot.com changed, and returns the changes for
+    titles in your own Plex library (see LIBRARY_INDEX_FILE, written by the
+    Plex comparison) - the ones worth a line in the protocol and a
+    notification. Before the first Plex comparison, nothing counts as yours."""
+    library = _load_library_index()
+    relevant = []
+    for change in sorted(changes, key=lambda c: (c.get("title") or "").lower()):
+        in_library = change["key"] in library
+        log_score.info("Score changed: %s (%s) %s -> %s%s", change.get("title") or "?", change["key"],
+                       change["old"], change["new"], " [in your library]" if in_library else "")
+        if in_library:
+            relevant.append({"title": change.get("title") or change["key"],
+                             "old": change["old"], "new": change["new"]})
+    return relevant
+
+
+def score_sync(log=None, full: bool = False, progress=None, slot_reserved: bool = False) -> dict:
+    """Stage 1: score sync against isitwokeornot.com - incremental, or with
+    full=True every title again. Triggered via the "Update Score Database"/
+    "Full Rebuild" buttons or as part of the autopilot. Returns stats for the
+    run protocol (see _record_run).
+
+    If the sitemap fetch itself fails, the cooldown slot is handed back (see
+    _release_rebuild_slot): no review page was requested, so there's nothing
+    to protect isitwokeornot.com from, and the next attempt shouldn't have to
+    wait out the cooldown."""
+    if not slot_reserved:
+        wait = _reserve_rebuild_slot()
+        if wait:
+            _emit(log, log_score, "score_sync.cooldown", seconds=int(wait))
+            return {"skipped_cooldown": True}
     cache = load_cache()
+    changes = []
 
     def on_progress(done, total):
+        if progress:
+            progress(done, total)
         if done and done % 200 == 0:
-            CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
+            _save_cache(cache)
 
-    cache, processed = bsc.build_cache(cache, on_progress=on_progress)
-    CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
-    _emit(log, t("score_sync.done", processed=processed, total=len(cache)))
-    return {"scores_updated": processed, "scores_total": len(cache)}
+    log_score.info("%s score sync, %d titles in the local database.", "Full" if full else "Incremental", len(cache))
+    try:
+        cache, processed = bsc.build_cache(cache, on_progress=on_progress, skip_existing=not full, changes=changes)
+    except bsc.SitemapError:
+        _release_rebuild_slot()
+        raise
+    _save_cache(cache)
+    _emit(log, log_score, "score_sync.done", processed=processed, total=len(cache))
+    return {"scores_updated": processed, "scores_total": len(cache), "score_changes": _report_score_changes(changes)}
 
 
 def sync_library(log=None) -> dict:
@@ -603,7 +843,7 @@ def sync_library(log=None) -> dict:
     translated log text.
     """
     if demo_mode():
-        _emit(log, t("sync.demo_mode"))
+        _emit(log, log_plex, "sync.demo_mode")
         return {"missing_originals": []}
 
     cache = load_cache()
@@ -618,9 +858,14 @@ def sync_library(log=None) -> dict:
     # show's match instead of being looked up independently.
     titled_entries = []
     matched_titles = 0  # movies/shows only - seasons inherit and would inflate this
+    library_index = set()  # every title in Plex as a cache key, scored or not
     for rk, (item, prefix) in library.items():
         tmdb_id = tmdb_id_from_item(item)
-        entry = cache.get(f"{prefix}:{tmdb_id}") if tmdb_id else None
+        if not tmdb_id:
+            log_plex.debug("%s: no TMDb ID in Plex, can't be matched.", item.title)
+            continue
+        library_index.add(f"{prefix}:{tmdb_id}")
+        entry = cache.get(f"{prefix}:{tmdb_id}")
         if not entry:
             continue
         titled_entries.append((rk, item, entry))
@@ -630,6 +875,10 @@ def sync_library(log=None) -> dict:
                 season_rk = str(season.ratingKey)
                 valid_keys.add(season_rk)
                 titled_entries.append((season_rk, season, entry))
+    if library:
+        _save_library_index(library_index)
+    log_plex.info("Plex library: %d titles, %d with a score (%d posters incl. seasons).",
+                  len(library), matched_titles, len(titled_entries))
 
     # Fetch original posters where none is cached yet
     to_warm = [(item, entry) for rk, item, entry in titled_entries if not (ORIGINALS_DIR / f"{rk}.jpg").exists()]
@@ -643,11 +892,14 @@ def sync_library(log=None) -> dict:
                     _, found = f.result()
                     if not found:
                         warnings.append(_display_title(item))
+                    else:
+                        log_plex.debug("Fetched original poster: %s", _display_title(item))
                 except Exception as e:
-                    _emit(log, t("sync.poster_fetch_error", title=_display_title(item), error=e))
-        _emit(log, t("sync.posters_fetched", count=len(to_warm)))
+                    _emit(log, log_plex, "sync.poster_fetch_error", level=logging.WARNING,
+                          title=_display_title(item), error=_describe(e))
+        _emit(log, log_plex, "sync.posters_fetched", count=len(to_warm))
     if warnings:
-        _emit(log, t("sync.missing_originals_warning", titles=", ".join(warnings)))
+        _emit(log, log_plex, "sync.missing_originals_warning", level=logging.WARNING, titles=", ".join(warnings))
 
     # Render the branded version for new/changed titles
     rendered_state = _load_state_file(RENDERED_STATE_FILE)
@@ -664,26 +916,34 @@ def sync_library(log=None) -> dict:
         try:
             render_branded_image(item, entry)
             rendered += 1
+            log_plex.debug("Rendered: %s (%s%%)", _display_title(item), entry["score"])
         except Exception as e:
-            _emit(log, t("sync.render_error", title=_display_title(item), error=e))
+            _emit(log, log_plex, "sync.render_error", level=logging.WARNING, title=_display_title(item), error=_describe(e))
     if rendered:
-        _emit(log, t("sync.rendered_count", count=rendered))
+        _emit(log, log_plex, "sync.rendered_count", count=rendered)
 
-    # Remove orphans (titles no longer in Plex) - in both local folders
+    # Remove orphans (titles no longer in Plex) - in both local folders. Not
+    # when Plex returned no titles at all: that's far more likely a problem
+    # (every library name wrong, an empty response) than a library that was
+    # really emptied, and would otherwise wipe every cached poster.
     removed = 0
-    for folder in (ORIGINALS_DIR, BRANDED_DIR):
-        for f in folder.glob("*.jpg"):
-            if f.stem not in valid_keys:
-                try:
-                    f.unlink()
-                    removed += 1
-                except OSError:
-                    pass
-    if removed:
-        _emit(log, t("sync.orphans_removed", count=removed))
+    if library:
+        for folder in (ORIGINALS_DIR, BRANDED_DIR):
+            for f in folder.glob("*.jpg"):
+                if f.stem not in valid_keys:
+                    try:
+                        f.unlink()
+                        removed += 1
+                        log_plex.debug("Removed orphan: %s/%s", folder.name, f.name)
+                    except OSError as e:
+                        log_plex.warning("Could not remove orphan %s/%s: %s", folder.name, f.name, e)
+        if removed:
+            _emit(log, log_plex, "sync.orphans_removed", count=removed)
+    else:
+        log_plex.warning("Plex returned no titles - skipping the orphan cleanup as a precaution.")
 
     if not to_warm and not to_render and not removed:
-        _emit(log, t("sync.nothing_new"))
+        _emit(log, log_plex, "sync.nothing_new")
 
     return {
         "matched": matched_titles,
@@ -704,9 +964,14 @@ def push_pending_to_plex(log=None, progress=None, force: bool = False, rating_ke
     them again regardless, independent of the last pushed score - e.g. to
     force everything to re-upload after changing a badge setting.
     progress(done, total) is an optional callback for a progress indicator in the UI.
+
+    Besides the counts, returns "new_titles" (movies/shows that got their
+    very first badge in Plex, for the protocol and notifications) and, if any
+    upload failed, "push_error": the first failure as an error record, so
+    the protocol can say why instead of just how many.
     """
     if demo_mode():
-        _emit(log, t("push.demo_mode"))
+        _emit(log, log_push, "push.demo_mode")
         return {"pushed": 0, "push_failed": 0}
 
     cache = load_cache()
@@ -737,28 +1002,39 @@ def push_pending_to_plex(log=None, progress=None, force: bool = False, rating_ke
                     to_push.append((season, entry))
 
     if not to_push:
-        _emit(log, t("push.nothing_to_push"))
+        _emit(log, log_push, "push.nothing_to_push")
         if progress:
             progress(0, 0)
         return {"pushed": 0, "push_failed": 0}
 
+    log_push.info("Uploading %d poster(s) to Plex%s.", len(to_push), " (forced)" if force else "")
     progress_lock = threading.Lock()
     done = 0
     pushed = 0
     failed = 0
+    first_error = None
+    new_titles = []
 
     def process(item, entry):
-        nonlocal done, pushed, failed
+        nonlocal done, pushed, failed, first_error
+        rk = str(item.ratingKey)
         try:
-            message = push_to_plex(plex, item, entry, force)
+            push_to_plex(plex, item, entry, force)
         except Exception as e:
-            _emit(log, t("push.error", title=_display_title(item), error=e))
+            _emit(log, log_push, "push.error", level=logging.WARNING, title=_display_title(item), error=_describe(e))
+            log_push.debug("Traceback for %s:", _display_title(item), exc_info=True)
             with progress_lock:
                 failed += 1
+                if first_error is None:
+                    first_error = _error_record("push", e)
         else:
-            _emit(log, message)
+            _emit(log, log_push, "push.ok", title=_display_title(item))
             with progress_lock:
                 pushed += 1
+                # Movies/shows only (seasons aren't in library), and only if
+                # this title had never been uploaded before
+                if rk in library and rk not in pushed_state:
+                    new_titles.append(_display_title(item))
         finally:
             if progress:
                 with progress_lock:
@@ -770,29 +1046,57 @@ def push_pending_to_plex(log=None, progress=None, force: bool = False, rating_ke
         for f in as_completed(futures):
             pass
 
-    return {"pushed": pushed, "push_failed": failed}
+    return {
+        "pushed": pushed,
+        "push_failed": failed,
+        "new_titles": sorted(new_titles, key=str.lower),
+        "push_error": first_error,
+    }
 
 
 def autonomous_sync(log=None, progress=None) -> dict:
     """Autopilot: all three stages in sequence (score sync, Plex comparison
-    incl. rendering, push). Usable individually for manual intervention: see
-    score_sync/sync_library/push_pending_to_plex. Records one combined entry
-    in the run protocol."""
+    incl. rendering, push), recorded as one entry in the run protocol.
+    Usable individually for manual intervention: see score_sync/
+    sync_library/push_pending_to_plex.
+
+    The stages fail independently: if isitwokeornot.com is unreachable, the
+    run carries on with the scores already in the local database, so new
+    Plex titles still get their badge. Only a failed Plex comparison skips
+    the push - it needs the same Plex connection that just failed."""
     def _progress(step):
         if progress:
             progress(step, 3)
 
-    started = datetime.datetime.now(datetime.timezone.utc)
-    stats = {}
+    started = _run_started("autopilot")
+    stats, errors = {}, []
+
+    def run_stage(stage, fn) -> bool:
+        try:
+            stats.update(fn())
+            return True
+        except Exception as e:
+            record = _error_record(stage, e)
+            errors.append(record)
+            log_autopilot.exception("%s", _error_summary(record, t_log))
+            return False
+
     try:
-        stats.update(score_sync(log=log))
+        if not run_stage("score_sync", lambda: score_sync(log=log)):
+            log_autopilot.warning("Continuing with the scores already in the local database.")
         _progress(1)
-        stats.update(sync_library(log=log))
-        _progress(2)
-        stats.update(push_pending_to_plex(log=log))
+        if run_stage("sync", lambda: sync_library(log=log)):
+            _progress(2)
+            run_stage("push", lambda: push_pending_to_plex(log=log))
+        else:
+            log_autopilot.warning("Skipping the push to Plex - the Plex comparison didn't complete.")
         _progress(3)
     finally:
-        _record_run("autopilot", started, stats)
+        push_error = stats.pop("push_error", None)
+        if push_error:
+            errors.append(push_error)
+        _record_run("autopilot", started, stats, errors)
+        _notify_run(stats, errors)
     return stats
 
 
@@ -802,28 +1106,131 @@ def _reserve_rebuild_slot() -> float:
     elapsed. Returns 0 (and reserves) if a run may start, otherwise the
     remaining wait time in seconds.
     """
-    global _last_rebuild_started
+    global _last_rebuild_started, _previous_rebuild_started
     with _rebuild_lock:
         elapsed = time.time() - _last_rebuild_started
         if elapsed < CACHE_REBUILD_COOLDOWN_SECONDS:
             return CACHE_REBUILD_COOLDOWN_SECONDS - elapsed
+        _previous_rebuild_started = _last_rebuild_started
         _last_rebuild_started = time.time()
         return 0.0
 
 
+def _release_rebuild_slot() -> None:
+    """Undoes the last reservation - for a run that never got to request a
+    single review page (see score_sync)."""
+    global _last_rebuild_started
+    with _rebuild_lock:
+        _last_rebuild_started = _previous_rebuild_started
+    log_score.info("Cooldown released - the sitemap fetch failed, so the next attempt may start right away.")
+
+
+def _notify_run(stats: dict, errors: list) -> None:
+    """Sends one notification for an autopilot run, if NOTIFY_URL is set and
+    the run has something NOTIFY_ON asks for. Best-effort: never raises."""
+    if not NOTIFY_TARGET:
+        return
+    try:
+        changes = stats.get("score_changes") or []
+        new_titles = stats.get("new_titles") or []
+        report_errors = bool(errors) and "error" in NOTIFY_ON
+        report_changes = bool(changes or new_titles) and "changes" in NOTIFY_ON
+        if not (report_errors or report_changes):
+            return
+
+        blocks = []
+        if report_errors:
+            blocks.append("\n".join(f"{_error_summary(e)}\n{e['message']}" for e in errors))
+        if report_changes:
+            lines = []
+            if new_titles:
+                lines.append(t("notify.new_titles", titles=_join_capped(new_titles)))
+            if changes:
+                lines.append(t("notify.score_changes", changes=_join_capped(
+                    [f"{c['title']} {c['old']} → {c['new']}" for c in changes])))
+            blocks.append("\n".join(lines))
+
+        notify.send(
+            NOTIFY_TARGET,
+            title=t("notify.title_error") if report_errors else t("notify.title_changes"),
+            message="\n\n".join(blocks),
+            high_priority=report_errors,
+        )
+    except Exception:
+        log_notify.exception("Could not send notification")
+
+
+def _join_capped(items: list, limit: int = 10) -> str:
+    shown = ", ".join(items[:limit])
+    if len(items) > limit:
+        shown += " " + t("notify.more", count=len(items) - limit)
+    return shown
+
+
+# The time the autopilot loop is currently waiting for (local, tz-aware) -
+# shown in the footer. Taken from the loop itself rather than recomputed, so
+# the footer can never disagree with what actually happens.
+_next_auto_run = None
+
+
 def _auto_sync_loop():
+    global _next_auto_run
     while True:
         now = datetime.datetime.now()
         next_run = croniter(AUTO_SYNC_CRON, now).get_next(datetime.datetime)
-        sleep_seconds = (next_run - now).total_seconds()
+        _next_auto_run = next_run.astimezone()
+        log_autopilot.debug("Next run: %s", _next_auto_run.isoformat(timespec="minutes"))
+        sleep_seconds = (next_run - datetime.datetime.now()).total_seconds()
         if sleep_seconds > 0:
             time.sleep(sleep_seconds)
         try:
             autonomous_sync()
-        except Exception as e:
-            print(f"[auto-sync] Unexpected error: {e}", flush=True)
+        except Exception:
+            # Stage failures are handled inside autonomous_sync - this only
+            # catches the unforeseen, so the loop itself never dies
+            log_autopilot.exception("Unexpected error outside of the sync stages")
 
 
+def _log_startup() -> None:
+    """A short summary of the effective configuration - the first thing to
+    look at when something behaves unexpectedly. Never logs secrets."""
+    tz_name = os.environ.get("TZ", "").strip()
+    offset = datetime.datetime.now().astimezone().strftime("%z")
+    offset = f"UTC{offset[:3]}:{offset[3:]}"
+    log_config.info("Wokearr %s%s - language %s, log level %s, time zone %s (%s)",
+                    APP_VERSION, f" (build {BUILD_DATE})" if BUILD_DATE else "", LANGUAGE,
+                    logging.getLevelName(get_logger("config").getEffectiveLevel()), tz_name or "UTC", offset)
+    if tz_name in ("", "UTC", "Etc/UTC"):
+        # Compose passes Etc/UTC when TZ isn't set, so treat that as "unset"
+        log_config.info("Log times and AUTO_SYNC_CRON use UTC. Set TZ (e.g. Europe/Berlin) to use your local time.")
+    elif not _tz_is_known(tz_name):
+        log_config.warning("TZ=%r is not a known time zone - falling back to UTC. Use a name like Europe/Berlin.",
+                           tz_name)
+    if demo_mode():
+        log_config.info("Demo mode: PLEX_URL/PLEX_TOKEN not set.")
+    else:
+        log_config.info("Plex: %s, libraries: %s", urlsplit(PLEX_URL).netloc or PLEX_URL, ", ".join(LIBRARY_SECTIONS))
+    if AUTO_SYNC_CRON:
+        first_run = croniter(AUTO_SYNC_CRON, datetime.datetime.now()).get_next(datetime.datetime)
+        log_config.info("Autopilot: %r, next run %s", AUTO_SYNC_CRON, first_run.strftime("%Y-%m-%d %H:%M"))
+    else:
+        log_config.info("Autopilot: disabled (AUTO_SYNC_CRON not set)")
+    if NOTIFY_TARGET:
+        log_config.info("Notifications: %s, on: %s", NOTIFY_TARGET.display, ", ".join(sorted(NOTIFY_ON)))
+    else:
+        log_config.info("Notifications: disabled (NOTIFY_URL not set)")
+
+
+def _tz_is_known(name: str) -> bool:
+    try:
+        from zoneinfo import ZoneInfo
+        ZoneInfo(name)
+        return True
+    except Exception:
+        return False
+
+
+_log_startup()
 if AUTO_SYNC_CRON:
     threading.Thread(target=_auto_sync_loop, daemon=True).start()
 
@@ -854,15 +1261,30 @@ def healthz():
 
 @app.route("/api/status")
 def api_status():
-    """Version/build info plus the run protocol for the footer. Newest run
-    first, so the frontend doesn't have to reverse the list."""
+    """Version/build info, the next autopilot run and the run protocol for
+    the footer. Newest run first, so the frontend doesn't have to reverse
+    the list."""
     return jsonify({
         "version": APP_VERSION,
         "build_date": BUILD_DATE or None,
         "version_url": VERSION_URL,
         "color_scheme": BADGE_COLOR_SCHEME,
+        "next_run": _next_auto_run.isoformat() if AUTO_SYNC_CRON and _next_auto_run else None,
         "runs": list(reversed(load_runs())),
     })
+
+
+def _release_date(item) -> str | None:
+    """ISO date for sorting by release in the grid; Plex's exact date when it
+    has one, else just the year."""
+    released = getattr(item, "originallyAvailableAt", None)
+    if released:
+        try:
+            return released.date().isoformat() if hasattr(released, "date") else str(released)[:10]
+        except Exception:
+            pass
+    year = getattr(item, "year", None)
+    return f"{year:04d}-01-01" if isinstance(year, int) else None
 
 
 @app.route("/api/library")
@@ -873,29 +1295,24 @@ def api_library():
     cache = load_cache()
     plex = get_plex()
     items = []
-    for section_name in LIBRARY_SECTIONS:
-        try:
-            section = plex.library.section(section_name)
-        except Exception:
+    for rk, (it, prefix) in _current_library_items(plex).items():
+        tmdb_id = tmdb_id_from_item(it)
+        if not tmdb_id:
             continue
-        prefix = PLEX_TYPE_TO_CACHE_PREFIX.get(section.type)
-        if not prefix:
+        entry = cache.get(f"{prefix}:{tmdb_id}")
+        if not entry:
             continue
-        for it in section.all():
-            tmdb_id = tmdb_id_from_item(it)
-            if not tmdb_id:
-                continue
-            entry = cache.get(f"{prefix}:{tmdb_id}")
-            if not entry:
-                continue
-            items.append({
-                "ratingKey": it.ratingKey,
-                "title": it.title,
-                "year": it.year,
-                "score": entry["score"],
-                "type": section.type,
-                "sourceUrl": _with_utm(entry.get("url")),
-            })
+        items.append({
+            "ratingKey": it.ratingKey,
+            "title": it.title,
+            # Plex's own sort title ("Matrix, The") - sorts the way Plex does
+            "sortTitle": getattr(it, "titleSort", None) or it.title,
+            "year": it.year,
+            "released": _release_date(it),
+            "score": entry["score"],
+            "type": "movie" if prefix == "movie" else "show",
+            "sourceUrl": _with_utm(entry.get("url")),
+        })
     return jsonify({"demo": False, "items": items})
 
 
@@ -934,43 +1351,66 @@ def api_poster(rating_key):
     return resp
 
 
+# Which logger a failed manual job is reported under, by stage
+_STAGE_LOGGERS = {"score_sync": log_score, "sync": log_plex, "push": log_push, "cleanup": log_cleanup}
+
+
+def _start_job(trigger: str, stage: str, work, total: int = 0, initial_log=None) -> str:
+    """Runs work(job, job_log) -> stats in a background thread, the same way
+    for every button: records the run in the protocol, and turns an
+    exception into an error record - logged with its traceback in the
+    container, summarized in the user's language in the browser."""
+    job_id = str(uuid.uuid4())
+    job = {"state": "running", "progress": [0, total], "log": list(initial_log or [])}
+    JOBS[job_id] = job
+
+    def job_log(msg):
+        job["log"].append(msg)
+
+    def run():
+        started = _run_started(trigger)
+        stats, errors = {}, []
+        try:
+            stats = work(job, job_log) or {}
+            job["state"] = "done"
+        except Exception as e:
+            record = _error_record(stage, e)
+            errors.append(record)
+            _STAGE_LOGGERS.get(stage, log_run).exception("%s", _error_summary(record, t_log))
+            job["state"] = "error"
+            job["error"] = _error_summary(record)
+            job_log(job["error"])
+        finally:
+            push_error = stats.pop("push_error", None)
+            if push_error:
+                errors.append(push_error)
+            _record_run(trigger, started, stats, errors)
+
+    threading.Thread(target=run, daemon=True).start()
+    return job_id
+
+
 @app.route("/api/rebuild-cache", methods=["POST"])
 def api_rebuild_cache():
     payload = request.get_json(silent=True) or {}
     full = bool(payload.get("full"))
 
+    # Reserved here rather than in score_sync, so a click during the cooldown
+    # gets its answer right away instead of starting a job that does nothing
     wait = _reserve_rebuild_slot()
     if wait:
         return jsonify({"error": t("rebuild_cache.cooldown_error", seconds=int(wait) + 1)}), 429
 
-    job_id = str(uuid.uuid4())
-    JOBS[job_id] = {"state": "running", "progress": [0, 0], "log": [t("rebuild_cache.loading")]}
+    def work(job, job_log):
+        return score_sync(
+            log=job_log,
+            full=full,
+            progress=lambda done, total: job.update(progress=[done, total]),
+            slot_reserved=True,
+        )
 
-    def run():
-        started = datetime.datetime.now(datetime.timezone.utc)
-        stats = {}
-        try:
-            import build_score_cache as bsc
-            cache = load_cache()
-
-            def on_progress(done, total):
-                JOBS[job_id]["progress"] = [done, total]
-                if done and done % 200 == 0:
-                    CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
-
-            cache, processed = bsc.build_cache(cache, on_progress=on_progress, skip_existing=not full)
-            CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
-            stats = {"scores_updated": processed, "scores_total": len(cache)}
-            JOBS[job_id]["state"] = "done"
-            JOBS[job_id]["log"].append(t("rebuild_cache.done", processed=processed, total=len(cache)))
-        except Exception as e:
-            JOBS[job_id]["state"] = "error"
-            JOBS[job_id]["log"].append(str(e))
-            stats["error"] = True
-        finally:
-            _record_run("score_sync_full" if full else "score_sync", started, stats)
-
-    threading.Thread(target=run, daemon=True).start()
+    job_id = _start_job("score_sync_full" if full else "score_sync", "score_sync", work,
+                        initial_log=[t("rebuild_cache.loading")])
     return jsonify({"job_id": job_id})
 
 
@@ -982,25 +1422,12 @@ def api_sync_library():
     if demo_mode():
         return jsonify({"error": t("api.sync_library.demo_error")}), 400
 
-    job_id = str(uuid.uuid4())
-    JOBS[job_id] = {"state": "running", "progress": [0, 0], "log": []}
+    def work(job, job_log):
+        stats = sync_library(log=job_log)
+        job["missing_originals"] = stats.get("missing_originals", [])
+        return stats
 
-    def run():
-        started = datetime.datetime.now(datetime.timezone.utc)
-        stats = {}
-        try:
-            stats = sync_library(log=lambda msg: JOBS[job_id]["log"].append(msg))
-            JOBS[job_id]["missing_originals"] = stats.get("missing_originals", [])
-            JOBS[job_id]["state"] = "done"
-        except Exception as e:
-            JOBS[job_id]["state"] = "error"
-            JOBS[job_id]["log"].append(str(e))
-            stats["error"] = True
-        finally:
-            _record_run("sync", started, stats)
-
-    threading.Thread(target=run, daemon=True).start()
-    return jsonify({"job_id": job_id})
+    return jsonify({"job_id": _start_job("sync", "sync", work)})
 
 
 @app.route("/api/apply", methods=["POST"])
@@ -1014,29 +1441,16 @@ def api_apply():
 
     payload = request.get_json(force=True)
     rating_keys = [str(rk) for rk in payload.get("ratingKeys", [])]
-    job_id = str(uuid.uuid4())
-    JOBS[job_id] = {"state": "running", "progress": [0, len(rating_keys)], "log": []}
 
-    def run():
-        started = datetime.datetime.now(datetime.timezone.utc)
-        stats = {}
-        try:
-            stats = push_pending_to_plex(
-                log=lambda msg: JOBS[job_id]["log"].append(msg),
-                progress=lambda done, total: JOBS[job_id].update(progress=[done, total]),
-                force=True,
-                rating_keys=rating_keys,
-            )
-            JOBS[job_id]["state"] = "done"
-        except Exception as e:
-            JOBS[job_id]["state"] = "error"
-            JOBS[job_id]["log"].append(str(e))
-            stats["error"] = True
-        finally:
-            _record_run("push", started, stats)
+    def work(job, job_log):
+        return push_pending_to_plex(
+            log=job_log,
+            progress=lambda done, total: job.update(progress=[done, total]),
+            force=True,
+            rating_keys=rating_keys,
+        )
 
-    threading.Thread(target=run, daemon=True).start()
-    return jsonify({"job_id": job_id})
+    return jsonify({"job_id": _start_job("push", "push", work, total=len(rating_keys))})
 
 
 @app.route("/api/cleanup-posters", methods=["POST"])
@@ -1047,59 +1461,42 @@ def api_cleanup_posters():
     if demo_mode():
         return jsonify({"error": t("api.cleanup.demo_error")}), 400
 
-    job_id = str(uuid.uuid4())
-    JOBS[job_id] = {"state": "running", "progress": [0, 0], "log": []}
+    def work(job, job_log):
+        plex = get_plex()
+        items = []
+        for it, _prefix in _current_library_items(plex).values():
+            items.append(it)
+            if getattr(it, "type", None) == "show":
+                items.extend(_seasons_for_show(it))
+        job["progress"] = [0, len(items)]
+        log_cleanup.info("Checking %d items for old poster uploads.", len(items))
 
-    def run():
-        started = datetime.datetime.now(datetime.timezone.utc)
-        stats = {}
-        try:
-            plex = get_plex()
-            items = []
-            for section_name in LIBRARY_SECTIONS:
-                try:
-                    section_items = plex.library.section(section_name).all()
-                except Exception:
-                    continue
-                items.extend(section_items)
-                for it in section_items:
-                    if getattr(it, "type", None) == "show":
-                        items.extend(_seasons_for_show(it))
-            JOBS[job_id]["progress"] = [0, len(items)]
+        progress_lock = threading.Lock()
+        done = 0
+        removed_total = 0
 
-            progress_lock = threading.Lock()
-            done = 0
-            removed_total = 0
+        def process(item):
+            nonlocal done, removed_total
+            try:
+                removed = cleanup_old_uploaded_posters(plex, item)
+            except Exception as e:
+                removed = 0
+                title = _display_title(item) if hasattr(item, "title") else "?"
+                _emit(job_log, log_cleanup, "cleanup.item_error", level=logging.WARNING, title=title, error=_describe(e))
+            with progress_lock:
+                done += 1
+                removed_total += removed
+                job["progress"] = [done, len(items)]
 
-            def process(item):
-                nonlocal done, removed_total
-                try:
-                    removed = cleanup_old_uploaded_posters(plex, item)
-                except Exception as e:
-                    removed = 0
-                    JOBS[job_id]["log"].append(t("cleanup.item_error", title=_display_title(item) if hasattr(item, "title") else "?", error=e))
-                with progress_lock:
-                    done += 1
-                    removed_total += removed
-                    JOBS[job_id]["progress"] = [done, len(items)]
+        with ThreadPoolExecutor(max_workers=POSTER_WORKERS) as pool:
+            futures = [pool.submit(process, item) for item in items]
+            for f in as_completed(futures):
+                pass
 
-            with ThreadPoolExecutor(max_workers=POSTER_WORKERS) as pool:
-                futures = [pool.submit(process, item) for item in items]
-                for f in as_completed(futures):
-                    pass
+        _emit(job_log, log_cleanup, "cleanup.done", count=removed_total)
+        return {"plex_posters_removed": removed_total}
 
-            stats = {"plex_posters_removed": removed_total}
-            JOBS[job_id]["state"] = "done"
-            JOBS[job_id]["log"].append(t("cleanup.done", count=removed_total))
-        except Exception as e:
-            JOBS[job_id]["state"] = "error"
-            JOBS[job_id]["log"].append(str(e))
-            stats["error"] = True
-        finally:
-            _record_run("cleanup", started, stats)
-
-    threading.Thread(target=run, daemon=True).start()
-    return jsonify({"job_id": job_id})
+    return jsonify({"job_id": _start_job("cleanup", "cleanup", work)})
 
 
 @app.route("/api/job/<job_id>")
@@ -1109,5 +1506,5 @@ def api_job(job_id):
 
 if __name__ == "__main__":
     # Only for local development outside of Docker - gunicorn runs in the container (see Dockerfile)
-    print("Demo mode:", demo_mode())
+    log_config.info("Demo mode: %s", demo_mode())
     app.run(host="0.0.0.0", port=5005, debug=True)

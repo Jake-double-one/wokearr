@@ -1,8 +1,9 @@
 FROM python:3.12-slim
 
-# DejaVu font for the badge label (Pillow needs a TrueType font)
+# DejaVu font for the badge label (Pillow needs a TrueType font); tzdata so
+# TZ (see docker-compose.yaml) works for log times and the cron schedule
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends fonts-dejavu-core \
+    && apt-get install -y --no-install-recommends fonts-dejavu-core tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

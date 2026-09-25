@@ -27,8 +27,10 @@ auf dem Score von [isitwokeornot.com](https://isitwokeornot.com/).
 
 ## Screenshot
 
-Poster-Grid mit farbigen Score-Badges, Filterleiste (Alle/Rot/Gelb/Grün) und
-Buttons für Score-Sync, Plex-Abgleich und Übertragen der Badges.
+Poster-Grid mit farbigen Score-Badges, Filterleiste mit den fünf Score-Stufen
+und Sortierung (Titel, Score, Veröffentlichung – auf- oder absteigend, merkt
+sich der Browser) sowie Buttons für Score-Sync, Plex-Abgleich und Übertragen
+der Badges.
 
 ## Schnellstart (Docker Compose)
 
@@ -81,9 +83,13 @@ reicht in Portainer **Stacks -> wokearr -> Pull and redeploy** (zieht das
 | `BADGE_WIDTH_PERCENT` | nein  | `20`            | Breite der Badge relativ zur Posterbreite, in Prozent. Mindestwert fest bei `20` verankert (kleinere Werte werden automatisch angehoben) |
 | `BADGE_COLOR_SCHEME` | nein  | `standard`      | Palette für die fünf Stufen: `standard` (wie isitwokeornot.com selbst) \| `modified` (grün/gelb/orange/rot/violett) |
 | `RUN_HISTORY_RETENTION` | nein | `4w`         | Aufbewahrung der Protokoll-Einträge: `<Zahl><Einheit>` mit `d`/`w`/`m`, z. B. `3d`, `4w`, `6m`. `0` behält alles |
-| `AUTO_SYNC_CRON` | nein | leer (aus) | Cron-Ausdruck (5 Felder) für den kompletten Autopilot-Lauf (Score-Sync, Poster-Cache, aufräumen, automatisch anwenden). Leer oder `0` deaktiviert. Z. B. `0 * * * *` für stündlich. |
+| `AUTO_SYNC_CRON` | nein | leer (aus) | Cron-Ausdruck (5 Felder) für den kompletten Autopilot-Lauf (Score-Sync, Poster-Cache, aufräumen, automatisch anwenden), ausgewertet in `TZ`. Leer oder `0` deaktiviert. Z. B. `0 * * * *` für stündlich. |
+| `TZ` | nein | `Etc/UTC` | Zeitzone für die Log-Zeiten **und** den `AUTO_SYNC_CRON`-Zeitplan, z. B. `Europe/Berlin`. Ohne sie bedeutet `0 7-23 * * *` 7–23 Uhr UTC, nicht eure Ortszeit |
 | `CACHE_REBUILD_COOLDOWN_MINUTES` | nein | `5` | Mindestabstand zwischen zwei Sitemap-Abrufen (manuell oder automatisch) |
 | `CLEANUP_OLD_POSTERS` | nein | `true` | Nach jedem Übertragen automatisch ältere, selbst hochgeladene Poster-Versionen in Plex löschen (siehe unten) |
+| `NOTIFY_URL` | nein | leer (aus) | Ziel für Benachrichtigungen über Autopilot-Läufe: Gotify, ntfy oder ein Webhook (siehe [Benachrichtigungen](#benachrichtigungen)) |
+| `NOTIFY_ON` | nein | `error,changes` | Worüber benachrichtigt wird: `error` (eine Stufe ist fehlgeschlagen) und/oder `changes` (neue Titel gebadged, Scores eurer Titel geändert) |
+| `LOG_LEVEL` | nein | `INFO` | Ausführlichkeit des Container-Logs: `DEBUG` \| `INFO` \| `WARNING` \| `ERROR`. `DEBUG` ergänzt eine Zeile pro Titel (siehe [Container-Log](#container-log)) |
 
 \* Ohne diese beiden Variablen läuft die App im Demo-Modus.
 
@@ -122,19 +128,30 @@ Im Volume `/data` liegen und überstehen Container-Neustarts/-Updates:
 `rendered_state.json`/`pushed_state.json` (merken sich pro Titel, mit
 welchem Score und welchen Badge-Einstellungen zuletzt gerendert bzw. zu Plex
 hochgeladen wurde), `run_history.json` (das Protokoll im Footer),
+`library_index.json` (welche Titel in eurer Plex-Bibliothek stehen – damit
+Score-Änderungen nur für eure Titel gemeldet werden),
 `url_state.json` (pro Review-URL der letzte Abrufversuch - damit Seiten ohne
 verwertbaren Score nicht bei jedem Lauf erneut geholt werden).
 
 ### Lauf-Protokoll
 
 Im Footer steht eine gedämpfte Zeile mit dem letzten Lauf und dem, was er
-geändert hat (gematchte Titel inkl. Differenz, aktualisierte Scores,
-gerenderte/übertragene Poster, entfernte Leichen). Ein Klick klappt die
-letzten Läufe als kompakte Tabelle auf – standardmäßig zu. Protokolliert
-wird jeder Lauf, egal ob vom Autopiloten oder per Button. Wie lange Einträge
-bleiben, steuert `RUN_HISTORY_RETENTION`. Daneben steht die laufende Version,
-bei `latest`-Images zusätzlich das Build-Datum. Die Version verlinkt auf dieses
+geändert hat (gematchte Titel inkl. Differenz, aktualisierte und geänderte
+Scores, gerenderte/übertragene Poster, entfernte Leichen), und bei aktivem
+Autopiloten, wann der nächste Lauf ansteht. Ein Klick klappt die letzten
+Läufe als kompakte Tabelle auf – standardmäßig zu. Protokolliert wird jeder
+Lauf, egal ob vom Autopiloten oder per Button. Wie lange Einträge bleiben,
+steuert `RUN_HISTORY_RETENTION`. Daneben steht die laufende Version, bei
+`latest`-Images zusätzlich das Build-Datum. Die Version verlinkt auf dieses
 Repository – bei einer getaggten Version direkt auf deren Release-Notes.
+
+Ein fehlgeschlagener Lauf nennt Stufe und Ursache im Klartext, z. B.
+„Score-Datenbank fehlgeschlagen: isitwokeornot.com antwortet nicht
+(Zeitüberschreitung)", und erscheint rot. Zeilen mit mehr Inhalt lassen sich
+aufklappen (antippen oder anklicken): welche eurer Titel einen neuen Score
+haben (`Barbie: 72 → 81`), welche erstmals ein Badge bekommen haben, und die
+technische Fehlermeldung. Alle Details inklusive Traceback stehen im
+[Container-Log](#container-log).
 
 Eine Auflistung der Änderungen je Version steht in
 [CHANGELOG.md](CHANGELOG.md).
@@ -168,7 +185,61 @@ Der Score-Sync-Schritt teilt sich mit dem manuellen Button unten einen
 gemeinsamen Cooldown (`CACHE_REBUILD_COOLDOWN_MINUTES`, Standard 5 Minuten)
 seit dem letzten Sitemap-Abruf, damit isitwokeornot.com nicht zu häufig
 angefragt wird - ein zu früher Lauf überspringt diese Stufe einfach und macht
-mit den restlichen weiter.
+mit den restlichen weiter. Ein fehlgeschlagener Sitemap-Abruf (nach einem
+zweiten Versuch bei Zeitüberschreitung und Serverfehlern) verbraucht den
+Cooldown nicht, da keine Review-Seite angefragt wurde.
+
+Die Stufen scheitern unabhängig voneinander: Ist isitwokeornot.com nicht
+erreichbar, macht der Lauf mit den Scores aus der lokalen Datenbank weiter –
+neue Plex-Titel bekommen also trotzdem ihr Badge. Nur ein fehlgeschlagener
+Plex-Abgleich überspringt das Übertragen, weil es dieselbe Plex-Verbindung
+braucht.
+
+Der Zeitplan wird in der Zeitzone des Containers ausgewertet – `TZ` setzen
+(z. B. `Europe/Berlin`), sonst läuft er nach UTC.
+
+## Benachrichtigungen
+
+Mit gesetzter `NOTIFY_URL` meldet sich der Autopilot, wenn eine Stufe
+fehlschlägt und/oder sich etwas geändert hat (`NOTIFY_ON`): neue Titel mit
+Badge, oder isitwokeornot.com hat den Score eines Titels aus eurer Bibliothek
+geändert. Ruhige Läufe schicken nichts. Manuelle Läufe benachrichtigen nicht –
+da schaut ihr ja ohnehin auf die Oberfläche. Die URL-Formate folgen denen von
+[Apprise](https://github.com/caronc/apprise/wiki):
+
+| Dienst | `NOTIFY_URL` |
+|---|---|
+| Gotify | `gotify://host/APP_TOKEN` (http), `gotifys://host/APP_TOKEN` (https), auch mit Port und Unterpfad: `gotifys://host:8443/gotify/APP_TOKEN` |
+| ntfy | `ntfy://TOPIC` (ntfy.sh), `ntfy://host/TOPIC` (http), `ntfys://host/TOPIC` (https), mit Login `ntfys://user:pass@host/TOPIC` oder Token `ntfys://host/TOPIC?token=tk_...` |
+| Webhook | jede `http(s)://`-URL – bekommt einen JSON-`POST` mit `title`, `message`, `priority` (`normal`/`high`) |
+
+Fehler kommen mit hoher Priorität (Gotify 8, ntfy 4), Änderungen mit normaler.
+Zum Prüfen der Einrichtung eine Testnachricht aus dem Container schicken:
+
+```bash
+docker exec wokearr python notify.py
+```
+
+## Container-Log
+
+Jede Zeile hat Zeitstempel (in `TZ`), Level und Bereich, z. B.:
+
+```
+2026-09-22 19:00:00 INFO    [run] Started: Autopilot
+2026-09-22 19:00:02 WARNING [score-sync] Sitemap fetch failed after 2.0s (attempt 1/2): HTTPError: 503 ... - retrying in 15s.
+2026-09-22 19:00:17 ERROR   [autopilot] Score database failed: isitwokeornot.com returned HTTP 503
+Traceback (most recent call last): ...
+2026-09-22 19:00:17 WARNING [autopilot] Continuing with the scores already in the local database.
+2026-09-22 19:00:19 WARNING [run] Finished with errors: Autopilot in 19.4s - 27 matched; Score database failed: ...
+```
+
+Die Meldungen sind unabhängig von `LANGUAGE` immer englisch – so lassen sie
+sich durchsuchen und unverändert in einem Issue teilen. Beim Start protokolliert
+Wokearr seine wirksame Konfiguration (Version, Zeitzone, Bibliotheken,
+Zeitplan und nächster Lauf, Benachrichtigungsziel) – niemals Tokens oder
+Passwörter. `LOG_LEVEL=DEBUG` ergänzt eine Zeile pro Titel (geholt,
+gerendert, entfernt). Ansehen mit `docker logs wokearr` oder in Portainer
+beim Container unter **Logs**.
 
 ## Manuelle Bedienung
 

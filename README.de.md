@@ -148,6 +148,12 @@ steuert `RUN_HISTORY_RETENTION`. Daneben steht die laufende Version, bei
 `latest`-Images zusätzlich das Build-Datum. Die Version verlinkt auf dieses
 Repository – bei einer getaggten Version direkt auf deren Release-Notes.
 
+**„Scores aktualisiert" vs. „Scores geändert":** *Aktualisiert* zählt die
+Review-Seiten, die neu abgerufen wurden, weil isitwokeornot.com sie als
+geändert markiert hat – oft nur ein überarbeiteter Text oder eine neue
+Review. *Geändert* zählt nur Titel aus eurer Bibliothek, deren Score-Wert sich
+tatsächlich geändert hat; nur die lösen eine Benachrichtigung aus.
+
 Ein fehlgeschlagener Lauf nennt Stufe und Ursache im Klartext, z. B.
 „Score-Datenbank fehlgeschlagen: isitwokeornot.com antwortet nicht
 (Zeitüberschreitung)", und erscheint rot. Zeilen mit mehr Inhalt lassen sich
@@ -264,7 +270,9 @@ Außerdem, sobald eine Anmeldung aktiv ist:
 Mit gesetzter `NOTIFY_URL` meldet sich der Autopilot, wenn eine Stufe
 fehlschlägt und/oder sich etwas geändert hat (`NOTIFY_ON`): neue Titel mit
 Badge, oder isitwokeornot.com hat den Score eines Titels aus eurer Bibliothek
-geändert. Ruhige Läufe schicken nichts. Manuelle Läufe benachrichtigen nicht –
+geändert. Ruhige Läufe schicken nichts – auch keine, die nur „Scores
+aktualisiert" zeigen (siehe [Lauf-Protokoll](#lauf-protokoll)). Manuelle
+Läufe benachrichtigen nicht –
 da schaut ihr ja ohnehin auf die Oberfläche. Die URL-Formate folgen denen von
 [Apprise](https://github.com/caronc/apprise/wiki):
 

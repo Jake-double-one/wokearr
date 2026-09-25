@@ -146,6 +146,11 @@ autopilot or from one of the buttons. How long entries are kept is set via
 `latest` images, the build date. The version links to this repository - for a
 tagged version straight to its release notes.
 
+**"Scores updated" vs. "scores changed":** *updated* counts the review pages
+fetched again because isitwokeornot.com marked them as modified - often just
+an edited text or a new review. *Changed* counts only titles in your library
+whose score value actually changed; only those trigger a notification.
+
 A failed run names the stage and the reason in plain words, e.g. "Score
 database failed: isitwokeornot.com not responding (timeout)", and is shown in
 red. Rows with more to tell can be expanded (tap or click): which of your
@@ -252,7 +257,8 @@ Also, whenever a login is active:
 
 With `NOTIFY_URL` set, the autopilot sends a message when a stage fails and/or
 when something changed (`NOTIFY_ON`): new titles badged, or isitwokeornot.com
-changed the score of a title in your library. Quiet runs send nothing. Manual
+changed the score of a title in your library. Quiet runs send nothing - that
+includes runs that only show "scores updated" (see [Run protocol](#run-protocol)). Manual
 runs don't notify - you're looking at the UI then anyway. The URL formats
 follow [Apprise](https://github.com/caronc/apprise/wiki)'s:
 

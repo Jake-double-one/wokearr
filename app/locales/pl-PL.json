@@ -102,5 +102,17 @@
   "notify.title_changes": "Wokearr: zmiany",
   "notify.new_titles": "Nowe odznaki: {titles}",
   "notify.score_changes": "Zmienione wyniki: {changes}",
-  "notify.more": "i {count} więcej"
+  "notify.more": "i {count} więcej",
+  "login.title": "Logowanie",
+  "login.username": "Nazwa użytkownika",
+  "login.password": "Hasło",
+  "login.remember": "Zapamiętaj mnie",
+  "login.submit": "Zaloguj",
+  "login.error_invalid": "Nieprawidłowa nazwa użytkownika lub hasło.",
+  "login.error_locked": "Zbyt wiele nieudanych prób. Spróbuj ponownie za {minutes} min.",
+  "auth.logout": "Wyloguj",
+  "auth.required": "Wymagane logowanie.",
+  "auth.csrf": "Żądanie odrzucone: brak nagłówka bezpieczeństwa. Odśwież stronę.",
+  "auth.config_error_title": "Błędna konfiguracja logowania",
+  "auth.config_error_hint": "Wokearr pozostaje zablokowany, dopóki nie zostanie to poprawione w zmiennych środowiskowych, a kontener ponownie wdrożony."
 }

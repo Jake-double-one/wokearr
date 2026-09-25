@@ -88,6 +88,8 @@ e.g. to `:v0.1.0`.
 | `CLEANUP_OLD_POSTERS` | no | `true` | After every push, automatically delete older, self-uploaded poster versions in Plex (see below) |
 | `NOTIFY_URL` | no | empty (off) | Where to send notifications about autopilot runs: Gotify, ntfy or a webhook (see [Notifications](#notifications)) |
 | `NOTIFY_ON` | no | `error,changes` | What to notify about: `error` (a stage failed) and/or `changes` (new titles badged, scores of your titles changed) |
+| `AUTH_METHOD` | no | `none` | Login in front of the UI: `none` \| `basic` (browser popup, e.g. for authentik) \| `forms` (login page). See [Authentication](#authentication) |
+| `AUTH_USERNAME` / `AUTH_PASSWORD` | with `basic`/`forms` | – | The login, shared by `basic` and `forms`. Instead of `AUTH_PASSWORD`, `AUTH_PASSWORD_FILE` can point to a file (Docker secrets) |
 | `LOG_LEVEL` | no | `INFO` | Detail of the container log: `DEBUG` \| `INFO` \| `WARNING` \| `ERROR`. `DEBUG` adds a line per title (see [Container log](#container-log)) |
 
 \* Without these two variables, the app runs in demo mode.
@@ -127,7 +129,8 @@ The `/data` volume holds and survives container restarts/updates:
 badge settings were last rendered and last uploaded to Plex),
 `run_history.json` (the run protocol shown in the footer),
 `library_index.json` (which titles are in your Plex library, so score changes
-can be reported for your titles only),
+can be reported for your titles only), `session_secret` (signs the login
+cookie with `AUTH_METHOD=forms`),
 `url_state.json` (per review URL, the last fetch attempt - so pages that
 yield no usable score aren't re-fetched on every run).
 
@@ -189,6 +192,61 @@ needs the same Plex connection.
 
 The schedule is evaluated in the container's time zone - set `TZ` (e.g.
 `Europe/Berlin`), otherwise it runs on UTC.
+
+## Authentication
+
+Optional, off by default - like Radarr and Sonarr, set via `AUTH_METHOD`:
+
+| `AUTH_METHOD` | What you get |
+|---|---|
+| `none` (default) | No login. Also the right choice behind a proxy that authenticates on its own (e.g. authentik forward auth) - then port 5005 must not be reachable directly, or the proxy can simply be bypassed |
+| `basic` | The browser's own login popup (HTTP Basic). Works with authentik's "Send HTTP-Basic Authentication" (see below) |
+| `forms` | A login page like Radarr's, with "Remember me" (30 days) and a logout link in the footer |
+
+Both use the same login from `AUTH_USERNAME` and `AUTH_PASSWORD` (or
+`AUTH_PASSWORD_FILE`), so you can switch between them without changing
+anything else:
+
+```yaml
+    environment:
+      AUTH_METHOD: "forms"
+      AUTH_USERNAME: "admin"
+      AUTH_PASSWORD: "a long password"
+```
+
+In a compose file, write a `$` in the password as `$$` - otherwise compose
+treats it as a variable and a different password arrives.
+
+**`basic` only behind HTTPS.** The browser sends the credentials with every
+request, merely base64-encoded, and there's no logout - it keeps them until
+it's closed. Radarr removed Basic in v6 for these reasons. Behind authentik
+with HTTPS that's fine: authentik injects the credentials itself.
+
+**authentik with `basic`:** create a group with the attributes
+`wokearr_user` and `wokearr_password` (same values as `AUTH_USERNAME`/
+`AUTH_PASSWORD`), then in the Wokearr proxy provider enable *Send HTTP-Basic
+Authentication* with those two attribute names. authentik logs you in once
+and passes the login on - no second prompt.
+
+Also, whenever a login is active:
+
+- **Fails closed:** if `basic`/`forms` is set but the login is incomplete, or
+  `AUTH_METHOD` is unknown, Wokearr stays locked and shows the reason - it
+  never silently falls back to "no login". `/healthz` then reports
+  `unhealthy`, so it shows up in Portainer.
+- **Brute-force protection:** after 5 failed logins from one address within
+  15 minutes, further attempts from it are refused until the oldest failure
+  has aged out. Every failure is logged in a form fail2ban/CrowdSec can
+  parse: `WARNING [auth] Failed login for user 'x' from 203.0.113.5`
+- **CSRF protection:** requests that change something need a header the UI
+  sends and foreign pages can't, so another website can't trigger actions
+  with your browser's stored login.
+- With `forms`, the session cookie is HttpOnly and SameSite=Lax, and Secure
+  whenever the page is served over HTTPS (also behind a proxy that sends
+  `X-Forwarded-Proto`). Changing `AUTH_USERNAME` or `AUTH_PASSWORD` ends all
+  existing sessions. The signing key lives in `/data/session_secret`, so a
+  restart doesn't log you out.
+- `/healthz` stays reachable without a login, for Docker's health check.
 
 ## Notifications
 

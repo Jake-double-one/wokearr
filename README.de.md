@@ -89,6 +89,8 @@ reicht in Portainer **Stacks -> wokearr -> Pull and redeploy** (zieht das
 | `CLEANUP_OLD_POSTERS` | nein | `true` | Nach jedem Übertragen automatisch ältere, selbst hochgeladene Poster-Versionen in Plex löschen (siehe unten) |
 | `NOTIFY_URL` | nein | leer (aus) | Ziel für Benachrichtigungen über Autopilot-Läufe: Gotify, ntfy oder ein Webhook (siehe [Benachrichtigungen](#benachrichtigungen)) |
 | `NOTIFY_ON` | nein | `error,changes` | Worüber benachrichtigt wird: `error` (eine Stufe ist fehlgeschlagen) und/oder `changes` (neue Titel gebadged, Scores eurer Titel geändert) |
+| `AUTH_METHOD` | nein | `none` | Anmeldung vor der Oberfläche: `none` \| `basic` (Browser-Anmeldefenster, z. B. für authentik) \| `forms` (Anmeldeseite). Siehe [Anmeldung](#anmeldung) |
+| `AUTH_USERNAME` / `AUTH_PASSWORD` | bei `basic`/`forms` | – | Die Zugangsdaten, gemeinsam für `basic` und `forms`. Statt `AUTH_PASSWORD` kann `AUTH_PASSWORD_FILE` auf eine Datei zeigen (Docker Secrets) |
 | `LOG_LEVEL` | nein | `INFO` | Ausführlichkeit des Container-Logs: `DEBUG` \| `INFO` \| `WARNING` \| `ERROR`. `DEBUG` ergänzt eine Zeile pro Titel (siehe [Container-Log](#container-log)) |
 
 \* Ohne diese beiden Variablen läuft die App im Demo-Modus.
@@ -129,7 +131,8 @@ Im Volume `/data` liegen und überstehen Container-Neustarts/-Updates:
 welchem Score und welchen Badge-Einstellungen zuletzt gerendert bzw. zu Plex
 hochgeladen wurde), `run_history.json` (das Protokoll im Footer),
 `library_index.json` (welche Titel in eurer Plex-Bibliothek stehen – damit
-Score-Änderungen nur für eure Titel gemeldet werden),
+Score-Änderungen nur für eure Titel gemeldet werden), `session_secret`
+(signiert das Anmelde-Cookie bei `AUTH_METHOD=forms`),
 `url_state.json` (pro Review-URL der letzte Abrufversuch - damit Seiten ohne
 verwertbaren Score nicht bei jedem Lauf erneut geholt werden).
 
@@ -197,6 +200,64 @@ braucht.
 
 Der Zeitplan wird in der Zeitzone des Containers ausgewertet – `TZ` setzen
 (z. B. `Europe/Berlin`), sonst läuft er nach UTC.
+
+## Anmeldung
+
+Optional und standardmäßig aus – wie bei Radarr und Sonarr über `AUTH_METHOD`:
+
+| `AUTH_METHOD` | Was ihr bekommt |
+|---|---|
+| `none` (Standard) | Keine Anmeldung. Auch die richtige Wahl hinter einem Proxy, der selbst anmeldet (z. B. authentik Forward Auth) – dann darf Port 5005 nicht direkt erreichbar sein, sonst lässt sich der Proxy einfach umgehen |
+| `basic` | Das Anmeldefenster des Browsers (HTTP Basic). Funktioniert mit authentiks „Send HTTP-Basic Authentication" (siehe unten) |
+| `forms` | Eine Anmeldeseite wie bei Radarr, mit „Angemeldet bleiben" (30 Tage) und Abmelden-Link im Footer |
+
+Beide nutzen dieselben Zugangsdaten aus `AUTH_USERNAME` und `AUTH_PASSWORD`
+(oder `AUTH_PASSWORD_FILE`) – ihr könnt also zwischen ihnen wechseln, ohne
+sonst etwas zu ändern:
+
+```yaml
+    environment:
+      AUTH_METHOD: "forms"
+      AUTH_USERNAME: "admin"
+      AUTH_PASSWORD: "ein langes Passwort"
+```
+
+In einer Compose-Datei ein `$` im Passwort als `$$` schreiben – sonst hält
+Compose es für eine Variable, und es kommt ein anderes Passwort an.
+
+**`basic` nur hinter HTTPS.** Der Browser schickt die Zugangsdaten bei jeder
+Anfrage mit, nur base64-kodiert, und Abmelden gibt es nicht – er behält sie,
+bis er geschlossen wird. Aus diesen Gründen hat Radarr Basic in v6 entfernt.
+Hinter authentik mit HTTPS ist das unkritisch: authentik reicht die
+Zugangsdaten selbst weiter.
+
+**authentik mit `basic`:** eine Gruppe mit den Attributen `wokearr_user` und
+`wokearr_password` anlegen (dieselben Werte wie `AUTH_USERNAME`/
+`AUTH_PASSWORD`), dann im Proxy-Provider für Wokearr *Send HTTP-Basic
+Authentication* mit diesen beiden Attributnamen aktivieren. authentik meldet
+euch einmal an und reicht die Anmeldung weiter – ohne zweite Abfrage.
+
+Außerdem, sobald eine Anmeldung aktiv ist:
+
+- **Im Zweifel gesperrt:** Ist `basic`/`forms` gesetzt, aber die Anmeldung
+  unvollständig, oder `AUTH_METHOD` unbekannt, bleibt Wokearr gesperrt und
+  nennt den Grund – es fällt niemals still auf „ohne Anmeldung" zurück.
+  `/healthz` meldet dann `unhealthy`, das ist in Portainer sichtbar.
+- **Schutz vor Durchprobieren:** Nach 5 Fehlversuchen von einer Adresse
+  innerhalb von 15 Minuten werden weitere Versuche von dort abgewiesen, bis
+  der älteste Fehlversuch abgelaufen ist. Jeder Fehlversuch landet in einer
+  Form im Log, die fail2ban/CrowdSec auswerten können:
+  `WARNING [auth] Failed login for user 'x' from 203.0.113.5`
+- **CSRF-Schutz:** Anfragen, die etwas ändern, brauchen einen Header, den die
+  Oberfläche mitschickt und fremde Seiten nicht setzen können – eine andere
+  Webseite kann also keine Aktionen mit der gespeicherten Anmeldung eures
+  Browsers auslösen.
+- Bei `forms` ist das Sitzungs-Cookie HttpOnly und SameSite=Lax, und Secure,
+  sobald die Seite über HTTPS kommt (auch hinter einem Proxy, der
+  `X-Forwarded-Proto` setzt). Eine Änderung von `AUTH_USERNAME` oder
+  `AUTH_PASSWORD` beendet alle bestehenden Sitzungen. Der Signierschlüssel
+  liegt in `/data/session_secret`, ein Neustart meldet also niemanden ab.
+- `/healthz` bleibt ohne Anmeldung erreichbar, für den Docker-Healthcheck.
 
 ## Benachrichtigungen
 

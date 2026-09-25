@@ -102,5 +102,17 @@
   "notify.title_changes": "Wokearr: cambios",
   "notify.new_titles": "Nuevos badges: {titles}",
   "notify.score_changes": "Puntuaciones cambiadas: {changes}",
-  "notify.more": "y {count} más"
+  "notify.more": "y {count} más",
+  "login.title": "Iniciar sesión",
+  "login.username": "Usuario",
+  "login.password": "Contraseña",
+  "login.remember": "Mantener sesión iniciada",
+  "login.submit": "Iniciar sesión",
+  "login.error_invalid": "Usuario o contraseña incorrectos.",
+  "login.error_locked": "Demasiados intentos fallidos. Inténtalo de nuevo en {minutes} min.",
+  "auth.logout": "Cerrar sesión",
+  "auth.required": "Inicio de sesión requerido.",
+  "auth.csrf": "Solicitud rechazada: falta la cabecera de seguridad. Recarga la página.",
+  "auth.config_error_title": "Inicio de sesión mal configurado",
+  "auth.config_error_hint": "Wokearr permanece bloqueado hasta que se corrija en las variables de entorno y se vuelva a desplegar el contenedor."
 }

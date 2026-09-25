@@ -102,5 +102,17 @@
   "notify.title_changes": "Wokearr: değişiklikler",
   "notify.new_titles": "Yeni rozetler: {titles}",
   "notify.score_changes": "Değişen puanlar: {changes}",
-  "notify.more": "ve {count} tane daha"
+  "notify.more": "ve {count} tane daha",
+  "login.title": "Giriş",
+  "login.username": "Kullanıcı adı",
+  "login.password": "Parola",
+  "login.remember": "Beni hatırla",
+  "login.submit": "Giriş yap",
+  "login.error_invalid": "Kullanıcı adı veya parola hatalı.",
+  "login.error_locked": "Çok fazla başarısız deneme. {minutes} dk. sonra tekrar deneyin.",
+  "auth.logout": "Çıkış yap",
+  "auth.required": "Giriş gerekli.",
+  "auth.csrf": "İstek reddedildi: güvenlik başlığı eksik. Lütfen sayfayı yeniden yükleyin.",
+  "auth.config_error_title": "Giriş yanlış yapılandırılmış",
+  "auth.config_error_hint": "Ortam değişkenlerinde düzeltilip kapsayıcı yeniden dağıtılana kadar Wokearr kilitli kalır."
 }

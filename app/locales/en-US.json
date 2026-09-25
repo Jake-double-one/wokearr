@@ -102,5 +102,17 @@
   "notify.title_changes": "Wokearr: changes",
   "notify.new_titles": "Newly badged: {titles}",
   "notify.score_changes": "Scores changed: {changes}",
-  "notify.more": "and {count} more"
+  "notify.more": "and {count} more",
+  "login.title": "Log in",
+  "login.username": "Username",
+  "login.password": "Password",
+  "login.remember": "Remember me",
+  "login.submit": "Log in",
+  "login.error_invalid": "Incorrect username or password.",
+  "login.error_locked": "Too many failed attempts. Try again in {minutes} min.",
+  "auth.logout": "Log out",
+  "auth.required": "Login required.",
+  "auth.csrf": "Request rejected: security header missing. Please reload the page.",
+  "auth.config_error_title": "Login misconfigured",
+  "auth.config_error_hint": "Wokearr stays locked until this is fixed in the environment variables and the container is redeployed."
 }

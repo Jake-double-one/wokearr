@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="{{ language[:2] }}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>{{ t('login.title') }} · Wokearr</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="login-page">
+
+<main class="login-panel">
+  <div class="login-brand">
+    <span class="brand-mark">WA</span>
+    <span class="brand-name">Wokearr</span>
+  </div>
+
+  <form class="login-form" method="post" action="{{ url_for('login') }}">
+    <input type="hidden" name="next" value="{{ next }}">
+
+    <label class="login-label" for="login-username">{{ t('login.username') }}</label>
+    <input class="login-input" id="login-username" name="username" type="text" value="{{ username }}"
+           autocomplete="username" autocapitalize="none" spellcheck="false" required
+           {%- if not username %} autofocus{% endif %}>
+
+    <label class="login-label" for="login-password">{{ t('login.password') }}</label>
+    <input class="login-input" id="login-password" name="password" type="password"
+           autocomplete="current-password" required
+           {%- if username %} autofocus{% endif %}>
+
+    <label class="login-remember">
+      <input type="checkbox" name="remember" value="1"> {{ t('login.remember') }}
+    </label>
+
+    {% if error %}<p class="login-error" role="alert">{{ error }}</p>{% endif %}
+
+    <button class="btn btn-primary login-submit" type="submit">{{ t('login.submit') }}</button>
+  </form>
+</main>
+
+</body>
+</html>

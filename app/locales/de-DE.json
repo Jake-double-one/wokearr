@@ -102,5 +102,17 @@
   "notify.title_changes": "Wokearr: Änderungen",
   "notify.new_titles": "Neu mit Badge: {titles}",
   "notify.score_changes": "Score geändert: {changes}",
-  "notify.more": "und {count} weitere"
+  "notify.more": "und {count} weitere",
+  "login.title": "Anmelden",
+  "login.username": "Benutzername",
+  "login.password": "Passwort",
+  "login.remember": "Angemeldet bleiben",
+  "login.submit": "Anmelden",
+  "login.error_invalid": "Benutzername oder Passwort falsch.",
+  "login.error_locked": "Zu viele Fehlversuche. Bitte in {minutes} Min. erneut versuchen.",
+  "auth.logout": "Abmelden",
+  "auth.required": "Anmeldung erforderlich.",
+  "auth.csrf": "Anfrage abgelehnt: Sicherheits-Header fehlt. Bitte die Seite neu laden.",
+  "auth.config_error_title": "Anmeldung falsch konfiguriert",
+  "auth.config_error_hint": "Wokearr bleibt gesperrt, bis das in den Umgebungsvariablen behoben und der Container neu deployt ist."
 }

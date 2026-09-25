@@ -68,6 +68,20 @@ function updateSortControls() {
   dirBtn.setAttribute("aria-label", label);
 }
 
+// Every API call goes through here: the X-Requested-With header is what the
+// server checks for requests that change something when a login is active
+// (CSRF protection, see auth.py), and a 401 with the login page (forms) means
+// the session ended - back to the login instead of failing silently.
+async function apiFetch(url, options = {}) {
+  const headers = { ...(options.headers || {}), "X-Requested-With": "wokearr" };
+  const res = await fetch(url, { ...options, headers });
+  if (res.status === 401 && window.__AUTH_METHOD__ === "forms") {
+    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+    throw new Error("login required");
+  }
+  return res;
+}
+
 function t(key, vars) {
   let template = (window.__I18N__ && window.__I18N__[key]) || key;
   if (vars) {
@@ -158,7 +172,7 @@ function hideToast() {
 
 async function pollJob(jobId, labelPrefix) {
   while (true) {
-    const res = await fetch(`/api/job/${jobId}`);
+    const res = await apiFetch(`/api/job/${jobId}`);
     const job = await res.json();
     const [done, total] = job.progress || [0, 0];
     const pct = total ? Math.round((done / total) * 100) : 0;
@@ -340,7 +354,7 @@ function renderStatus(data) {
 
 async function loadStatus() {
   try {
-    const res = await fetch("/api/status");
+    const res = await apiFetch("/api/status");
     renderStatus(await res.json());
   } catch (e) {
     // The protocol is a nice-to-have - never let it break the main view
@@ -348,7 +362,7 @@ async function loadStatus() {
 }
 
 async function loadLibrary() {
-  const res = await fetch("/api/library");
+  const res = await apiFetch("/api/library");
   const data = await res.json();
   ITEMS = data.items;
   document.getElementById("demo-flag").style.display = data.demo ? "inline-block" : "none";
@@ -357,7 +371,7 @@ async function loadLibrary() {
 
 async function applyBadges(ratingKeys, btn) {
   if (btn) { btn.disabled = true; btn.textContent = t("card.loading"); }
-  const res = await fetch("/api/apply", {
+  const res = await apiFetch("/api/apply", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ratingKeys }),
@@ -380,7 +394,7 @@ function warnAboutMissingOriginals(job) {
 }
 
 async function triggerRebuild(full) {
-  const res = await fetch("/api/rebuild-cache", {
+  const res = await apiFetch("/api/rebuild-cache", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ full }),
@@ -398,7 +412,7 @@ async function triggerRebuild(full) {
 document.getElementById("btn-sync-library").addEventListener("click", async (e) => {
   const btn = e.currentTarget;
   btn.disabled = true;
-  const res = await fetch("/api/sync-library", { method: "POST" });
+  const res = await apiFetch("/api/sync-library", { method: "POST" });
   const data = await res.json();
   if (data.error) {
     showToast(data.error);
@@ -427,7 +441,7 @@ document.getElementById("btn-apply-all").addEventListener("click", () => {
 document.getElementById("btn-cleanup-posters").addEventListener("click", async () => {
   const ok = confirm(t("confirm.cleanup_posters"));
   if (!ok) return;
-  const res = await fetch("/api/cleanup-posters", { method: "POST" });
+  const res = await apiFetch("/api/cleanup-posters", { method: "POST" });
   const data = await res.json();
   if (data.error) {
     showToast(data.error);

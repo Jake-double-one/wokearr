@@ -3,7 +3,7 @@
 All notable changes to Wokearr, newest first. Version numbers match the image
 tags on `ghcr.io/jake-double-one/wokearr`.
 
-## [Unreleased]
+## [v0.4.0] – 2026-09-25
 
 ### Added
 - **Optional login**, like Radarr and Sonarr, via `AUTH_METHOD`:
@@ -24,6 +24,12 @@ tags on `ghcr.io/jake-double-one/wokearr`.
   header only the UI sends (CSRF protection). The `forms` session cookie is
   HttpOnly, SameSite=Lax, Secure over HTTPS, and ends when the password
   changes.
+
+### Upgrade note
+Nothing to do: the login is off (`AUTH_METHOD=none`) unless you set it. If
+you had already put `AUTH_USERNAME`/`AUTH_PASSWORD` into your environment,
+note that they only take effect together with `AUTH_METHOD=basic` or `forms` -
+the startup log warns about that combination.
 
 ## [v0.3.2] – 2026-09-25
 
@@ -259,7 +265,7 @@ ready-built image on GHCR for Docker Compose and Portainer.
 Note: the tag `v0.2` points at the same commit as `v0.2.2` – an accidental
 duplicate, not a separate release.
 
-[Unreleased]: https://github.com/Jake-double-one/wokearr/compare/v0.3.2...main
+[v0.4.0]: https://github.com/Jake-double-one/wokearr/compare/v0.3.2...v0.4.0
 [v0.3.2]: https://github.com/Jake-double-one/wokearr/compare/v0.3.1...v0.3.2
 [v0.3.1]: https://github.com/Jake-double-one/wokearr/compare/v0.3.0...v0.3.1
 [v0.3.0]: https://github.com/Jake-double-one/wokearr/compare/v0.2.5...v0.3.0

@@ -29,6 +29,10 @@ import requests
 
 import os
 
+from logsetup import get_logger, setup_logging
+
+log = get_logger("score-sync")
+
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; ScoreCacheBuilder/0.1)"}
 DATA_DIR = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent / "data")))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -38,15 +42,53 @@ FAILED_RETRY_DAYS = 7     # how long a URL that yielded no score is left alone
 SLEEP_SECONDS = 0.3       # pause between requests per worker
 MAX_WORKERS = 4           # parallel requests - higher = faster, but less polite
 SITEMAP_URL = "https://isitwokeornot.com/sitemaps/titles-1.xml"
+SITEMAP_TIMEOUT = 30          # seconds per attempt
+SITEMAP_ATTEMPTS = 2          # one retry - a single slow response shouldn't cost the whole run
+SITEMAP_RETRY_PAUSE = 15      # seconds between attempts
+
+
+class SitemapError(Exception):
+    """The sitemap couldn't be fetched at all - raised before any review page
+    is requested. The original requests exception is the __cause__."""
+
+
+def _is_retryable(exc: requests.RequestException) -> bool:
+    """Timeouts, connection errors and server-side trouble (5xx, 429) may be
+    gone a few seconds later; a 404 or 403 won't be."""
+    if isinstance(exc, (requests.Timeout, requests.ConnectionError)):
+        return True
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    return status is not None and (status >= 500 or status == 429)
+
+
+def _fetch_sitemap() -> str:
+    for attempt in range(1, SITEMAP_ATTEMPTS + 1):
+        started = time.monotonic()
+        try:
+            resp = requests.get(SITEMAP_URL, headers=HEADERS, timeout=SITEMAP_TIMEOUT)
+            resp.raise_for_status()
+            log.debug("Sitemap fetched in %.1fs (%d KB).", time.monotonic() - started, len(resp.content) // 1024)
+            return resp.text
+        except requests.RequestException as e:
+            elapsed = time.monotonic() - started
+            if attempt < SITEMAP_ATTEMPTS and _is_retryable(e):
+                log.warning("Sitemap fetch failed after %.1fs (attempt %d/%d): %s: %s - retrying in %ds.",
+                            elapsed, attempt, SITEMAP_ATTEMPTS, type(e).__name__, e, SITEMAP_RETRY_PAUSE)
+                time.sleep(SITEMAP_RETRY_PAUSE)
+                continue
+            raise SitemapError(
+                f"Sitemap fetch failed after {elapsed:.1f}s (attempt {attempt}/{SITEMAP_ATTEMPTS}): {SITEMAP_URL}"
+            ) from e
+    raise AssertionError("unreachable")
 
 
 def get_title_urls() -> list[tuple[str, str | None]]:
     """Returns (url, lastmod) per sitemap entry. lastmod is None if the
-    sitemap doesn't give one for that URL."""
-    resp = requests.get(SITEMAP_URL, headers=HEADERS, timeout=30)
-    resp.raise_for_status()
+    sitemap doesn't give one for that URL. Raises SitemapError if the sitemap
+    can't be fetched, after one retry for transient errors."""
+    text = _fetch_sitemap()
     entries = []
-    for block in re.findall(r"<url>(.*?)</url>", resp.text, re.S):
+    for block in re.findall(r"<url>(.*?)</url>", text, re.S):
         loc_match = re.search(r"<loc>([^<]+)</loc>", block)
         if not loc_match:
             continue
@@ -117,10 +159,11 @@ def save_url_state(state: dict) -> None:
     try:
         URL_STATE_FILE.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
     except OSError as e:
-        print(f"[cache] Could not write {URL_STATE_FILE.name}: {e}", flush=True)
+        log.warning("Could not write %s: %s", URL_STATE_FILE.name, e)
 
 
-def build_cache(cache: dict, on_progress=None, skip_existing: bool = True) -> tuple[dict, int]:
+def build_cache(cache: dict, on_progress=None, skip_existing: bool = True,
+                changes: list | None = None) -> tuple[dict, int]:
     """
     Extends cache (in-place) with new/changed titles from the sitemap - in
     parallel with MAX_WORKERS workers.
@@ -145,9 +188,16 @@ def build_cache(cache: dict, on_progress=None, skip_existing: bool = True) -> tu
     on_progress(done, total) is called after each processed title (total
     only counts the URLs actually being fetched, not the skipped ones).
 
-    Returns (cache, number_of_urls_processed).
+    If a list is passed as changes, every title whose score differs from the
+    one already cached is appended to it as {key, title, old, new} - new
+    titles aren't changes and aren't included.
+
+    Returns (cache, number_of_urls_processed). Raises SitemapError if the
+    sitemap can't be fetched - nothing has been requested from the review
+    pages at that point.
     """
     entries = get_title_urls()
+    sitemap_total = len(entries)
     url_state = load_url_state()
     now = time.time()
 
@@ -174,6 +224,7 @@ def build_cache(cache: dict, on_progress=None, skip_existing: bool = True) -> tu
             return lastmod != known_lastmod
 
         entries = [(u, lm) for u, lm in entries if needs_fetch(u, lm)]
+    log.info("Sitemap: %d review pages, %d to fetch.", sitemap_total, len(entries))
 
     total = len(entries)
     done = 0
@@ -202,39 +253,43 @@ def build_cache(cache: dict, on_progress=None, skip_existing: bool = True) -> tu
                 # instead of re-fetching it on every run.
                 status = "duplicate_tmdb_id"
             else:
+                old = cache.get(key)
+                if old is None:
+                    log.debug("New review: %s (%s) %s%%", result.get("title") or "?", key, result["score"])
+                elif old.get("score") != result["score"] and changes is not None:
+                    changes.append({"key": key, "title": result.get("title") or old.get("title"),
+                                    "old": old.get("score"), "new": result["score"]})
                 cache[key] = {k: v for k, v in result.items() if k != "key"}
         if status != "ok":
             unresolved[status] = unresolved.get(status, 0) + 1
+            log.debug("No usable score (%s): %s", status, url)
         url_state[url] = {"lastmod": lastmod, "status": status, "checked": now}
 
     if entries:
         save_url_state(url_state)
     if unresolved:
         summary = ", ".join(f"{count}x {status}" for status, count in sorted(unresolved.items()))
-        print(f"[cache] {sum(unresolved.values())} URLs without a usable score ({summary}) - "
-              f"retried in {FAILED_RETRY_DAYS} days at the earliest.", flush=True)
+        log.info("%d URLs without a usable score (%s) - retried in %d days at the earliest.",
+                 sum(unresolved.values()), summary, FAILED_RETRY_DAYS)
 
     return cache, done
 
 
 def main():
+    setup_logging()
     cache = {}
     if CACHE_FILE.exists():
         cache = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
-        print(f"Loaded existing cache ({len(cache)} entries) - extending it.")
-
-    print("Fetching sitemap ...")
+        log.info("Loaded existing cache (%d entries) - extending it.", len(cache))
 
     def on_progress(done, total):
-        if done == 0:
-            print(f"{total} new/missing title URLs to process.")
-        elif done % 200 == 0:
-            print(f"  {done}/{total} processed, {len(cache)} in cache")
+        if done and done % 200 == 0:
+            log.info("%d/%d processed, %d in cache", done, total, len(cache))
             CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
 
     cache, done = build_cache(cache, on_progress=on_progress)
     CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"Done. {done} titles newly processed, {len(cache)} total in cache. -> {CACHE_FILE}")
+    log.info("Done. %d titles newly processed, %d total in cache -> %s", done, len(cache), CACHE_FILE)
 
 
 if __name__ == "__main__":

@@ -26,8 +26,10 @@ on the score from [isitwokeornot.com](https://isitwokeornot.com/).
 
 ## Screenshot
 
-Poster grid with colored score badges, a filter bar (All/Red/Yellow/Green),
-and buttons for score sync, Plex comparison, and pushing the badges.
+Poster grid with colored score badges, a filter bar with the five score bands
+and sorting (title, score, release date - ascending or descending, remembered
+per browser), and buttons for score sync, Plex comparison, and pushing the
+badges.
 
 ## Quickstart (Docker Compose)
 
@@ -80,9 +82,13 @@ e.g. to `:v0.1.0`.
 | `BADGE_WIDTH_PERCENT` | no  | `20`            | Badge width relative to poster width, in percent. Hard-floored at `20` (lower values are automatically raised) |
 | `BADGE_COLOR_SCHEME` | no  | `standard`      | Palette for the five score bands: `standard` (as used by isitwokeornot.com) \| `modified` (green/yellow/orange/red/violet) |
 | `RUN_HISTORY_RETENTION` | no | `4w`          | How long run-protocol entries are kept: `<number><unit>` with `d`/`w`/`m`, e.g. `3d`, `4w`, `6m`. `0` keeps everything |
-| `AUTO_SYNC_CRON` | no | empty (off) | 5-field cron expression for the full autopilot run (score sync, poster cache, cleanup, auto-push). Empty or `0` disables it. E.g. `0 * * * *` for hourly. |
+| `AUTO_SYNC_CRON` | no | empty (off) | 5-field cron expression for the full autopilot run (score sync, poster cache, cleanup, auto-push), evaluated in `TZ`. Empty or `0` disables it. E.g. `0 * * * *` for hourly. |
+| `TZ` | no | `Etc/UTC` | Time zone for log times **and** the `AUTO_SYNC_CRON` schedule, e.g. `Europe/Berlin`. Without it, `0 7-23 * * *` means 7-23 o'clock UTC, not your local time |
 | `CACHE_REBUILD_COOLDOWN_MINUTES` | no | `5` | Minimum gap between two sitemap fetches (manual or automatic) |
 | `CLEANUP_OLD_POSTERS` | no | `true` | After every push, automatically delete older, self-uploaded poster versions in Plex (see below) |
+| `NOTIFY_URL` | no | empty (off) | Where to send notifications about autopilot runs: Gotify, ntfy or a webhook (see [Notifications](#notifications)) |
+| `NOTIFY_ON` | no | `error,changes` | What to notify about: `error` (a stage failed) and/or `changes` (new titles badged, scores of your titles changed) |
+| `LOG_LEVEL` | no | `INFO` | Detail of the container log: `DEBUG` \| `INFO` \| `WARNING` \| `ERROR`. `DEBUG` adds a line per title (see [Container log](#container-log)) |
 
 \* Without these two variables, the app runs in demo mode.
 
@@ -120,19 +126,29 @@ The `/data` volume holds and survives container restarts/updates:
 `rendered_state.json`/`pushed_state.json` (track, per title, which score and
 badge settings were last rendered and last uploaded to Plex),
 `run_history.json` (the run protocol shown in the footer),
+`library_index.json` (which titles are in your Plex library, so score changes
+can be reported for your titles only),
 `url_state.json` (per review URL, the last fetch attempt - so pages that
 yield no usable score aren't re-fetched on every run).
 
 ### Run protocol
 
 The footer shows one quiet line with the last run and what it changed
-(matched titles incl. the delta, scores updated, posters rendered/uploaded,
-orphans cleaned up). A click expands the recent runs as a compact table -
+(matched titles incl. the delta, scores updated and changed, posters
+rendered/uploaded, orphans cleaned up) and, with the autopilot on, when the
+next run is due. A click expands the recent runs as a compact table -
 collapsed by default. Every run is recorded, whether it came from the
 autopilot or from one of the buttons. How long entries are kept is set via
 `RUN_HISTORY_RETENTION`. The footer also shows the running version and, for
 `latest` images, the build date. The version links to this repository - for a
 tagged version straight to its release notes.
+
+A failed run names the stage and the reason in plain words, e.g. "Score
+database failed: isitwokeornot.com not responding (timeout)", and is shown in
+red. Rows with more to tell can be expanded (tap or click): which of your
+titles got a new score (`Barbie: 72 → 81`), which were badged for the first
+time, and the raw error message. The full technical details, including the
+traceback, are in the [container log](#container-log).
 
 A per-version list of changes is in [CHANGELOG.md](CHANGELOG.md).
 
@@ -162,7 +178,58 @@ buttons below:
 The score-sync step shares a cooldown (`CACHE_REBUILD_COOLDOWN_MINUTES`,
 default 5 minutes) with the manual button below, counted since the last
 sitemap fetch, so isitwokeornot.com isn't hit too often - a run that's too
-early simply skips this stage and continues with the rest.
+early simply skips this stage and continues with the rest. A sitemap fetch
+that fails (after one retry for timeouts and server errors) doesn't use up the
+cooldown, since no review page was requested.
+
+The stages fail independently: if isitwokeornot.com is unreachable, the run
+continues with the scores already in the local database, so new Plex titles
+still get their badge. Only a failed Plex comparison skips the push, as it
+needs the same Plex connection.
+
+The schedule is evaluated in the container's time zone - set `TZ` (e.g.
+`Europe/Berlin`), otherwise it runs on UTC.
+
+## Notifications
+
+With `NOTIFY_URL` set, the autopilot sends a message when a stage fails and/or
+when something changed (`NOTIFY_ON`): new titles badged, or isitwokeornot.com
+changed the score of a title in your library. Quiet runs send nothing. Manual
+runs don't notify - you're looking at the UI then anyway. The URL formats
+follow [Apprise](https://github.com/caronc/apprise/wiki)'s:
+
+| Service | `NOTIFY_URL` |
+|---|---|
+| Gotify | `gotify://host/APP_TOKEN` (http), `gotifys://host/APP_TOKEN` (https), also with port and sub-path: `gotifys://host:8443/gotify/APP_TOKEN` |
+| ntfy | `ntfy://TOPIC` (ntfy.sh), `ntfy://host/TOPIC` (http), `ntfys://host/TOPIC` (https), with login `ntfys://user:pass@host/TOPIC` or token `ntfys://host/TOPIC?token=tk_...` |
+| Webhook | any `http(s)://` URL - receives a JSON `POST` with `title`, `message`, `priority` (`normal`/`high`) |
+
+Failures get high priority (Gotify 8, ntfy 4), changes normal. To check the
+setup, send a test message from inside the container:
+
+```bash
+docker exec wokearr python notify.py
+```
+
+## Container log
+
+Every line has a timestamp (in `TZ`), level and area, e.g.:
+
+```
+2026-09-22 19:00:00 INFO    [run] Started: Autopilot
+2026-09-22 19:00:02 WARNING [score-sync] Sitemap fetch failed after 2.0s (attempt 1/2): HTTPError: 503 ... - retrying in 15s.
+2026-09-22 19:00:17 ERROR   [autopilot] Score database failed: isitwokeornot.com returned HTTP 503
+Traceback (most recent call last): ...
+2026-09-22 19:00:17 WARNING [autopilot] Continuing with the scores already in the local database.
+2026-09-22 19:00:19 WARNING [run] Finished with errors: Autopilot in 19.4s - 27 matched; Score database failed: ...
+```
+
+Log messages are always in English, whatever `LANGUAGE` is set to - so they
+can be searched and shared in an issue as they are. At startup, Wokearr logs
+its effective configuration (version, time zone, libraries, schedule and next
+run, notification target) - never tokens or passwords. `LOG_LEVEL=DEBUG` adds
+a line per title (fetched, rendered, removed). View it with
+`docker logs wokearr`, or in Portainer under the container's **Logs**.
 
 ## Manual operation
 

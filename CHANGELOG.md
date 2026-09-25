@@ -3,6 +3,66 @@
 All notable changes to Wokearr, newest first. Version numbers match the image
 tags on `ghcr.io/jake-double-one/wokearr`.
 
+## [Unreleased]
+
+### Added
+- **Notifications** for autopilot runs via `NOTIFY_URL`: Gotify
+  (`gotify://`/`gotifys://`), ntfy (`ntfy://`/`ntfys://`) or any `http(s)://`
+  webhook, with URL formats as in Apprise. `NOTIFY_ON` picks what's reported:
+  `error` (a stage failed) and/or `changes` (new titles badged, scores of your
+  titles changed). Test with `docker exec wokearr python notify.py`.
+- **Sorting** in the filter bar: title, score or release date, ascending or
+  descending, remembered per browser. Titles sort like Plex does ("Matrix,
+  The").
+- **Next autopilot run** shown in the footer.
+- **Score changes by name**: the protocol counts how many of your titles got
+  a new score, and lists them when a row is expanded (`Barbie: 72 → 81`),
+  along with titles badged for the first time. The container log lists every
+  change isitwokeornot.com made.
+- `TZ` for log times and the cron schedule, `LOG_LEVEL` for the detail of the
+  container log.
+
+### Changed
+- **Container log rebuilt**: every line has a timestamp, level and area;
+  errors come with their traceback; every run logs a start and a finished
+  line with its numbers; the effective configuration is logged at startup
+  (never tokens or passwords). Messages are always in English, whatever
+  `LANGUAGE` says, so they can be searched and shared as they are.
+- **Failed runs say why**: the protocol names the failed stage and the reason
+  in plain words ("Score database failed: isitwokeornot.com not responding
+  (timeout)"), the raw message is one tap away, and the browser shows the
+  reason instead of just "error".
+- **Autopilot stages fail independently**: if isitwokeornot.com is down, the
+  run continues with the scores already known, so new Plex titles still get
+  their badge. Only a failed Plex comparison skips the push.
+- **Sitemap fetch retries once** on timeouts and server errors, and a failed
+  fetch no longer uses up the cooldown.
+- The delta in matched titles compares against the last run that counted
+  them, so a score-database run in between no longer hides it.
+
+### Fixed
+- **A failed autopilot run looked like a quiet one.** It recorded only the
+  numbers gathered up to the failure - dying in the first stage, it showed
+  "no changes", indistinguishable from a healthy run. The error was only in
+  the container log, without a timestamp.
+- **Errors from the buttons weren't logged at all** - only kept in memory for
+  the browser, gone after a reload or restart.
+- **The cron schedule ran on UTC**: nothing passed a time zone into the
+  container, so `0 7-23,0-2 * * *` meant UTC hours - 1-2 hours off from local
+  time in Central Europe. The compose file now passes `TZ` through, and the
+  image explicitly installs tzdata so it's guaranteed to take effect.
+- A Plex connection error while listing the libraries was treated as "library
+  not found" and skipped - with every library skipped, the orphan cleanup
+  would have deleted every cached poster. Connection errors now fail the
+  stage, and the orphan cleanup is skipped whenever Plex returns no titles.
+- A library name Plex doesn't know is now logged, with the names it does
+  know, instead of silently looking like an empty library.
+- Titles and error messages are HTML-escaped in the grid and the protocol.
+
+### Upgrade note
+Set `TZ` (e.g. `Europe/Berlin`) if your `AUTO_SYNC_CRON` is meant in local
+time - until now it was evaluated in UTC.
+
 ## [v0.3.1] – 2026-09-22
 
 ### Added
@@ -177,6 +237,7 @@ ready-built image on GHCR for Docker Compose and Portainer.
 Note: the tag `v0.2` points at the same commit as `v0.2.2` – an accidental
 duplicate, not a separate release.
 
+[Unreleased]: https://github.com/Jake-double-one/wokearr/compare/v0.3.1...main
 [v0.3.1]: https://github.com/Jake-double-one/wokearr/compare/v0.3.0...v0.3.1
 [v0.3.0]: https://github.com/Jake-double-one/wokearr/compare/v0.2.5...v0.3.0
 [v0.2.5]: https://github.com/Jake-double-one/wokearr/compare/v0.2.4...v0.2.5

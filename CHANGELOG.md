@@ -3,7 +3,7 @@
 All notable changes to Wokearr, newest first. Version numbers match the image
 tags on `ghcr.io/jake-double-one/wokearr`.
 
-## [Unreleased]
+## [v0.3.2] – 2026-09-25
 
 ### Added
 - **Notifications** for autopilot runs via `NOTIFY_URL`: Gotify
@@ -237,7 +237,7 @@ ready-built image on GHCR for Docker Compose and Portainer.
 Note: the tag `v0.2` points at the same commit as `v0.2.2` – an accidental
 duplicate, not a separate release.
 
-[Unreleased]: https://github.com/Jake-double-one/wokearr/compare/v0.3.1...main
+[v0.3.2]: https://github.com/Jake-double-one/wokearr/compare/v0.3.1...v0.3.2
 [v0.3.1]: https://github.com/Jake-double-one/wokearr/compare/v0.3.0...v0.3.1
 [v0.3.0]: https://github.com/Jake-double-one/wokearr/compare/v0.2.5...v0.3.0
 [v0.2.5]: https://github.com/Jake-double-one/wokearr/compare/v0.2.4...v0.2.5

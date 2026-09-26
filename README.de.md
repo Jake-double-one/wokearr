@@ -1,4 +1,4 @@
-# Wokearr
+# <img src="app/static/favicon.svg" alt="" width="44" align="absmiddle"> Wokearr
 
 [English version](README.md)
 

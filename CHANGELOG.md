@@ -3,6 +3,14 @@
 All notable changes to Wokearr, newest first. Version numbers match the image
 tags on `ghcr.io/jake-double-one/wokearr`.
 
+## [Unreleased]
+
+### Added
+- **Favicon and logo**: an open eye – "woke" literally means awake – in the
+  UI's orange. Browser tab (SVG, plus a 16/32/48 px `favicon.ico`), iPhone
+  home screen (`apple-touch-icon.png`) and the README title. `/favicon.ico`
+  is served at the root as well and stays reachable with a login active.
+
 ## [v0.4.0] – 2026-09-25
 
 ### Added
@@ -265,6 +273,7 @@ ready-built image on GHCR for Docker Compose and Portainer.
 Note: the tag `v0.2` points at the same commit as `v0.2.2` – an accidental
 duplicate, not a separate release.
 
+[Unreleased]: https://github.com/Jake-double-one/wokearr/compare/v0.4.0...main
 [v0.4.0]: https://github.com/Jake-double-one/wokearr/compare/v0.3.2...v0.4.0
 [v0.3.2]: https://github.com/Jake-double-one/wokearr/compare/v0.3.1...v0.3.2
 [v0.3.1]: https://github.com/Jake-double-one/wokearr/compare/v0.3.0...v0.3.1

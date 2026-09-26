@@ -1257,6 +1257,13 @@ def index():
     )
 
 
+@app.route("/favicon.ico")
+def favicon():
+    """Many clients (bookmarks, dashboards, link previews) ask for the icon at
+    the root instead of reading the <link> tags."""
+    return app.send_static_file("favicon.ico")
+
+
 @app.route("/healthz")
 def healthz():
     """Always reachable without login (Docker's health check). Reports a

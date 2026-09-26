@@ -31,6 +31,10 @@ and sorting (title, score, release date - ascending or descending, remembered
 per browser), and buttons for score sync, Plex comparison, and pushing the
 badges.
 
+![Wokearr: poster grid with score badges, filter bar with the five score bands, sorting and the run protocol line](docs/screenshot.png)
+
+*Titles, posters and scores in the screenshot are made up.*
+
 ## Quickstart (Docker Compose)
 
 ```bash

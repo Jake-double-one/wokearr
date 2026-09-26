@@ -293,7 +293,7 @@ function formatNextRun(iso) {
   const lang = window.__LANGUAGE__ || undefined;
   const sameDay = d.toDateString() === new Date().toDateString();
   return sameDay
-    ? d.toLocaleTimeString(lang, { hour: "2-digit", minute: "2-digit" })
+    ? d.toLocaleTimeString(lang, { timeStyle: "short" })  // "8:00 AM" / "08:00" - whatever the language uses
     : d.toLocaleString(lang, { dateStyle: "short", timeStyle: "short" });
 }
 

@@ -63,8 +63,8 @@ CSRF_HEADER = "X-Requested-With"
 CSRF_VALUE = "wokearr"
 
 # Reachable without a login: the Docker health check, the login page and the
-# static files it needs.
-PUBLIC_ENDPOINTS = {"healthz", "static", "login"}
+# static files it needs, and the icon at /favicon.ico.
+PUBLIC_ENDPOINTS = {"healthz", "static", "login", "favicon"}
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
@@ -257,7 +257,7 @@ class Auth:
         if endpoint == "healthz":
             return None
         if self.error:
-            return None if endpoint == "static" else self._config_error_response()
+            return None if endpoint in ("static", "favicon") else self._config_error_response()
         if self.method == "none" or endpoint in PUBLIC_ENDPOINTS:
             return None
 
@@ -305,7 +305,7 @@ class Auth:
             return jsonify({"error": f"{self.t('auth.config_error_title')}: {self.error}"}), 503
         page = f"""<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Wokearr</title></head>
+<title>Wokearr</title><link rel="icon" href="/static/favicon.svg" type="image/svg+xml"></head>
 <body style="background:#1c1e22;color:#e8e9eb;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
 padding:40px 16px;text-align:center">
 <h1 style="font-size:20px;color:#d72d20">{escape(self.t('auth.config_error_title'))}</h1>

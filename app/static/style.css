@@ -34,15 +34,8 @@ body {
 }
 
 .brand { display: flex; align-items: center; gap: 10px; }
-.brand-mark {
-  width: 30px; height: 30px;
-  border-radius: 6px;
-  background: var(--accent);
-  color: var(--accent-text);
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 700;
-  font-size: 12px;
-}
+/* The eye from favicon.svg - "woke" literally means awake */
+.brand-logo { display: block; width: 34px; height: 34px; }
 .brand-name { font-weight: 600; font-size: 16px; letter-spacing: 0.2px; }
 
 .topbar-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
@@ -306,6 +299,7 @@ main { padding: 20px; }
   border-bottom: 1px solid var(--border);
 }
 .login-brand .brand-name { font-size: 20px; }
+.login-brand .brand-logo { width: 42px; height: 42px; }
 .login-form { display: flex; flex-direction: column; padding: 22px 24px 26px; }
 .login-label { color: var(--muted); font-size: 12.5px; margin: 0 0 6px; }
 .login-input {

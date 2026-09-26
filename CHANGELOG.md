@@ -10,6 +10,15 @@ tags on `ghcr.io/jake-double-one/wokearr`.
   UI's orange. Browser tab (SVG, plus a 16/32/48 px `favicon.ico`), iPhone
   home screen (`apple-touch-icon.png`) and the README title. `/favicon.ico`
   is served at the root as well and stays reachable with a login active.
+- A screenshot in the README.
+
+### Changed
+- The eye replaces the "WA" mark in the header and on the login page.
+
+### Fixed
+- The next run in the footer used a two-digit hour in every language
+  ("08:00 AM"); it now follows each language's usual short time ("8:00 AM"
+  in English, "08:00" in German).
 
 ## [v0.4.0] – 2026-09-25
 

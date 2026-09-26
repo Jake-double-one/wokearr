@@ -32,6 +32,10 @@ und Sortierung (Titel, Score, Veröffentlichung – auf- oder absteigend, merkt
 sich der Browser) sowie Buttons für Score-Sync, Plex-Abgleich und Übertragen
 der Badges.
 
+![Wokearr: Poster-Grid mit Score-Badges, Filterleiste mit den fünf Score-Stufen, Sortierung und Protokollzeile](docs/screenshot.png)
+
+*Englische Oberfläche; Titel, Poster und Scores im Screenshot sind erfunden.*
+
 ## Schnellstart (Docker Compose)
 
 ```bash

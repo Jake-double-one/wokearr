@@ -3,7 +3,7 @@
 All notable changes to Wokearr, newest first. Version numbers match the image
 tags on `ghcr.io/jake-double-one/wokearr`.
 
-## [Unreleased]
+## [v0.4.1] – 2026-09-26
 
 ### Added
 - **Favicon and logo**: an open eye – "woke" literally means awake – in the
@@ -14,6 +14,9 @@ tags on `ghcr.io/jake-double-one/wokearr`.
 
 ### Changed
 - The eye replaces the "WA" mark in the header and on the login page.
+- The README explains the difference between "scores updated" (review pages
+  fetched again, e.g. an edited text) and "scores changed" (a title in your
+  library got a new score) - only the latter triggers a notification.
 
 ### Fixed
 - The next run in the footer used a two-digit hour in every language
@@ -282,7 +285,7 @@ ready-built image on GHCR for Docker Compose and Portainer.
 Note: the tag `v0.2` points at the same commit as `v0.2.2` – an accidental
 duplicate, not a separate release.
 
-[Unreleased]: https://github.com/Jake-double-one/wokearr/compare/v0.4.0...main
+[v0.4.1]: https://github.com/Jake-double-one/wokearr/compare/v0.4.0...v0.4.1
 [v0.4.0]: https://github.com/Jake-double-one/wokearr/compare/v0.3.2...v0.4.0
 [v0.3.2]: https://github.com/Jake-double-one/wokearr/compare/v0.3.1...v0.3.2
 [v0.3.1]: https://github.com/Jake-double-one/wokearr/compare/v0.3.0...v0.3.1

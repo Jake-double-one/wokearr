@@ -341,6 +341,22 @@ pushing the same title multiple times, e.g. while testing).
   versions.
 - This only affects Plex's own storage, not this app's `/data` Docker volume.
 
+## Companion: browser userscript
+
+Wokearr puts the scores on your Plex posters. Its sibling,
+[isitwokeornot-tampermonkey-companion](https://github.com/Jake-double-one/isitwokeornot-tampermonkey-companion), brings them into your browser:
+a [Tampermonkey](https://www.tampermonkey.net/) userscript that connects
+isitwokeornot.com with your own Seerr (Overseerr/Jellyseerr), Radarr and Sonarr,
+in both directions.
+
+- **On isitwokeornot.com:** buttons to open a title in Seerr, search for it in
+  Radarr/Sonarr, or request it in Seerr with one click.
+- **In Seerr:** a "Woke Score" row next to the other ratings on a title's page,
+  in the same five colours and linked to the review.
+
+Independent of Wokearr - install either one or both. Setup is in the
+[companion's README](https://github.com/Jake-double-one/isitwokeornot-tampermonkey-companion#installation).
+
 ## Notes
 
 - There's no official API from isitwokeornot.com; scores are read from the

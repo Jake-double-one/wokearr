@@ -358,6 +358,22 @@ beschränkt, füllt den Plattenplatz des Plex-Servers aber mit der Zeit spürbar
 - Das betrifft ausschließlich Plex' eigenen Speicher, nicht den `/data`-Docker-
   Volume dieser App.
 
+## Companion: Userscript für den Browser
+
+Wokearr bringt die Scores auf eure Plex-Poster. Sein Geschwisterprojekt
+[isitwokeornot-tampermonkey-companion](https://github.com/Jake-double-one/isitwokeornot-tampermonkey-companion) bringt sie in den Browser: ein
+[Tampermonkey](https://www.tampermonkey.net/)-Userscript, das isitwokeornot.com
+mit eurem eigenen Seerr (Overseerr/Jellyseerr), Radarr und Sonarr verbindet –
+in beide Richtungen.
+
+- **Auf isitwokeornot.com:** Buttons, um einen Titel in Seerr zu öffnen, in
+  Radarr/Sonarr zu suchen oder ihn mit einem Klick in Seerr anzufragen.
+- **In Seerr:** eine Zeile „Woke Score" neben den anderen Bewertungen auf der
+  Titelseite, in denselben fünf Farben und mit Link zur Review.
+
+Unabhängig von Wokearr – einzeln oder zusammen nutzbar. Die Einrichtung steht
+in der [README des Companions](https://github.com/Jake-double-one/isitwokeornot-tampermonkey-companion#installation) (englisch).
+
 ## Hinweise
 
 - Es gibt kein offizielles API von isitwokeornot.com; die Scores werden aus

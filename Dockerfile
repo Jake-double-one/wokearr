@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # DejaVu font for the badge label (Pillow needs a TrueType font); tzdata so
 # TZ (see docker-compose.yaml) works for log times and the cron schedule

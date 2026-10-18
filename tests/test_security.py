@@ -166,3 +166,22 @@ def test_invalid_poster_id_is_404(make_app):
     with patch.object(wa, "get_plex", side_effect=AssertionError("must not reach Plex")):
         for bad in ("abc", "12a", "..", "1e5"):
             assert c.get(f"/api/poster/{bad}").status_code == 404, bad
+
+
+def test_run_as_notice_only_when_entrypoint_fell_back_to_root(make_app):
+    """The web UI only says something when there is something to do."""
+    html = make_app().app.test_client().get("/").get_data(as_text=True)
+    assert "system-notice" not in html
+
+    module = make_app(WOKEARR_RUN_AS_NOTICE="chown_failed", PUID="1000", PGID="1000")
+    html = module.app.test_client().get("/").get_data(as_text=True)
+    assert "system-notice" in html and "1000:1000" in html and str(module.DATA_DIR) in html
+
+    html = make_app(WOKEARR_RUN_AS_NOTICE="<script>").app.test_client().get("/").get_data(as_text=True)
+    assert "system-notice" not in html
+
+
+def test_run_as_notice_escapes_bad_ids(make_app):
+    module = make_app(WOKEARR_RUN_AS_NOTICE="invalid_ids", PUID="<b>x</b>")
+    html = module.app.test_client().get("/").get_data(as_text=True)
+    assert "&lt;b&gt;x&lt;/b&gt;" in html and "<b>x</b>" not in html

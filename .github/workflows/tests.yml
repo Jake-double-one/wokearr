@@ -20,7 +20,7 @@ jobs:
       - name: Install
         run: pip install -r requirements.txt pytest pyflakes
       - name: Lint
-        run: python -m pyflakes app tests
+        run: python -m pyflakes app tests tools
       - name: Tests
         run: python -m pytest -q
 
@@ -39,3 +39,18 @@ jobs:
           pip install -r requirements.txt pip-audit
       - name: Audit installed packages
         run: pip-audit --skip-editable
+
+  container:
+    # The image as users get it: drops root, takes over data from versions
+    # that ran as root, falls back to root where it can't (tests/container_test.sh)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: docker build -t wokearr:ci .
+      - name: Start scenarios
+        run: sh tests/container_test.sh wokearr:ci
+      - name: licenses.txt up to date
+        run: >-
+          docker run --rm --entrypoint python -v "$PWD:/src:ro" wokearr:ci
+          /src/tools/licenses.py --check /src/licenses.txt /src/requirements.txt

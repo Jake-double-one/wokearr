@@ -39,6 +39,13 @@
   </div>
 </header>
 
+{%- if run_as_notice %}
+<div class="system-notice" role="status">
+  {{ run_as_notice }}
+  <a href="{{ 'https://github.com/Jake-double-one/wokearr/blob/main/README.de.md#ohne-root-ausführen' if language[:2] == 'de' else 'https://github.com/Jake-double-one/wokearr#running-without-root' }}" target="_blank" rel="noopener noreferrer">{{ t('notice.more') }}</a>
+</div>
+{%- endif %}
+
 <nav class="filterbar">
   <button class="chip chip-active" data-filter="all">{{ t('filter.all') }} <span class="count" id="count-all">0</span></button>
   {%- for band in bands %}

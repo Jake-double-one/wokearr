@@ -247,6 +247,14 @@ RUN_HISTORY_FILE = DATA_DIR / "run_history.json"
 # Hard cap, independent of RUN_HISTORY_RETENTION - a safety net so a very
 # long retention combined with a very tight cron can't grow without bound.
 RUN_HISTORY_MAX_ENTRIES = 500
+
+# Set by entrypoint.sh when it could not drop root and kept running as root
+# instead - the one case where the user has something to do, so the web UI
+# says what (see README "Running without root").
+RUN_AS_NOTICES = {"chown_failed", "not_writable", "invalid_ids"}
+RUN_AS_NOTICE = os.environ.get("WOKEARR_RUN_AS_NOTICE", "").strip()
+if RUN_AS_NOTICE not in RUN_AS_NOTICES:
+    RUN_AS_NOTICE = ""
 # ---------------------------------------------------------------------------
 
 app = Flask(__name__)
@@ -1317,6 +1325,9 @@ def index():
         # Only forms has a session to end - basic can't log out, the browser keeps the login
         show_logout=auth.active and auth.method == "forms",
         auth_method=auth.method if auth.active else "none",
+        run_as_notice=t(f"notice.run_as.{RUN_AS_NOTICE}", data_dir=str(DATA_DIR),
+                        user=f"{os.environ.get('PUID', '1000')}:{os.environ.get('PGID', '1000')}")
+        if RUN_AS_NOTICE else "",
     )
 
 

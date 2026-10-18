@@ -27,6 +27,11 @@ tags on `ghcr.io/jake-double-one/wokearr`.
   every response.
 - Dependencies: Pillow 12.1.1 → 12.3.0 (16 known vulnerabilities in image and
   font handling), requests 2.32.3 → 2.34.2 (2), plexapi 4.18.2 → 4.18.3.
+- **No longer runs as root**, but as user `1000:1000` (`PUID`/`PGID`). On
+  startup `/data` is handed over to that user once, data from older versions
+  included - nothing to do. Where that isn't possible (read-only or network
+  mount), Wokearr keeps running as root as before; the log and the web UI then
+  say what to change. `PUID=0` stays root.
 - `docker-compose.yaml` sets `no-new-privileges`.
 - `python app.py` (local development) no longer starts Werkzeug's debugger on
   all interfaces; it listens on 127.0.0.1, debugger only with `FLASK_DEBUG=1`.
@@ -35,6 +40,10 @@ tags on `ghcr.io/jake-double-one/wokearr`.
 - A test suite (`tests/`, pytest) and a GitHub Actions workflow that runs it
   together with a lint and a dependency audit on every pull request.
   Dependabot proposes updates for packages, the base image and actions weekly.
+  A further CI job builds the image and starts it in the scenarios below
+  (update from root, read-only mount, `PUID=0`, `user:`).
+- `licenses.txt`: the licenses of all libraries and other components in the
+  image, with full texts - also in the image under `/usr/share/doc/wokearr/`.
 
 ### Changed
 - Finished background jobs are no longer kept forever in memory; the latest
@@ -49,6 +58,10 @@ If a request to Plex ever failed and notifications were on, the Plex token
 may have been sent along. To renew it, sign out all devices in your Plex
 account settings and update `PLEX_TOKEN`. Scripts calling the API directly
 need the header `X-Requested-With: wokearr` for POST requests.
+
+Wokearr now runs as user `1000:1000` and hands `/data` over on the first
+start - the container log says so once. With a bind mount, the files on the
+host then belong to `1000:1000`; set `PUID`/`PGID` for a different user.
 
 ## [v0.4.1] – 2026-09-26
 

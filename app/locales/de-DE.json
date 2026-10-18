@@ -114,5 +114,9 @@
   "auth.required": "Anmeldung erforderlich.",
   "auth.csrf": "Anfrage abgelehnt: Sicherheits-Header fehlt. Bitte die Seite neu laden.",
   "auth.config_error_title": "Anmeldung falsch konfiguriert",
-  "auth.config_error_hint": "Wokearr bleibt gesperrt, bis das in den Umgebungsvariablen behoben und der Container neu deployt ist."
+  "auth.config_error_hint": "Wokearr bleibt gesperrt, bis das in den Umgebungsvariablen behoben und der Container neu deployt ist.",
+  "notice.run_as.chown_failed": "Wokearr läuft weiterhin als root: Der Datenordner {data_dir} konnte nicht an Benutzer {user} übergeben werden (schreibgeschützt oder Netzlaufwerk?). Alles funktioniert. Zum Umstellen den Ordner auf dem Host {user} geben oder PUID/PGID auf seinen Besitzer setzen – oder PUID=0 setzen, um bei root zu bleiben und diesen Hinweis auszublenden.",
+  "notice.run_as.not_writable": "Wokearr läuft weiterhin als root: Benutzer {user} kann nicht in den Datenordner {data_dir} schreiben. Alles funktioniert. Zum Umstellen PUID/PGID auf den Besitzer des Ordners auf dem Host setzen – oder PUID=0 setzen, um bei root zu bleiben und diesen Hinweis auszublenden.",
+  "notice.run_as.invalid_ids": "Wokearr läuft als root, weil PUID/PGID keine Zahlen sind ({user}). Alles funktioniert. Bitte korrigieren – oder PUID=0 setzen, um bei root zu bleiben und diesen Hinweis auszublenden.",
+  "notice.more": "Details"
 }

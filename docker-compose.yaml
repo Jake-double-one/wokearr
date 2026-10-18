@@ -33,6 +33,9 @@ services:
       RUN_HISTORY_RETENTION: "${RUN_HISTORY_RETENTION:-4w}"
       CLEANUP_OLD_POSTERS: "${CLEANUP_OLD_POSTERS:-true}"
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      # User/group Wokearr runs as and who owns /data (PUID=0: root) - see README
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
       # Optional login: none | basic | forms - see README "Authentication"
       AUTH_METHOD: "${AUTH_METHOD:-none}"
       AUTH_USERNAME: "${AUTH_USERNAME:-}"

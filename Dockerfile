@@ -12,6 +12,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ .
+COPY entrypoint.sh /usr/local/bin/wokearr-entrypoint
+COPY LICENSE licenses.txt /usr/share/doc/wokearr/
 
 # Version/build stamp, filled by the GitHub Action (see docker-publish.yml).
 # Deliberately placed after COPY: these change on every build and would
@@ -21,6 +23,7 @@ ARG BUILD_DATE=""
 
 ENV DATA_DIR=/data \
     PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
     APP_VERSION=${APP_VERSION} \
     BUILD_DATE=${BUILD_DATE}
 VOLUME ["/data"]
@@ -30,8 +33,12 @@ EXPOSE 5005
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5005/healthz')" || exit 1
 
+# Starts as root only to hand /data over, then drops to PUID:PGID
+# (default 1000:1000) - see entrypoint.sh
+ENTRYPOINT ["wokearr-entrypoint"]
+
 # Only 1 worker process: job progress (cache build/applying badges) lives in
 # an in-memory dict in app.py and must therefore stay in a single process,
 # otherwise some polling requests land in the wrong process ("unknown" status).
 # --threads still provides concurrency within that one process.
-CMD ["gunicorn", "--bind", "0.0.0.0:5005", "--workers", "1", "--threads", "4", "--timeout", "120", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5005", "--workers", "1", "--threads", "4", "--timeout", "120", "--no-control-socket", "app:app"]

@@ -13,9 +13,34 @@ details without drowning them in HTTP connection noise.
 """
 import logging
 import os
+import re
 import sys
 
 ROOT = "wokearr"
+
+# Secrets must never reach the log, the run protocol or a notification -
+# e.g. Plex image URLs carry the token as ?X-Plex-Token=..., and requests
+# puts the whole URL into its error messages. Two layers: credentials in URL
+# query strings by parameter name, and the configured secret values
+# themselves wherever they appear (see register_secret).
+_SECRET_PARAMS = re.compile(r"(?i)\b(x-plex-token|plex-token|token|api[_-]?key|apikey|password|passwd|secret)=([^&\s'\"<>]+)")
+_secret_values: set[str] = set()
+_MIN_SECRET_LENGTH = 6  # shorter values would blank out ordinary words
+
+
+def register_secret(value: str | None) -> None:
+    if value and len(value) >= _MIN_SECRET_LENGTH:
+        _secret_values.add(value)
+
+
+def redact(text: str) -> str:
+    if not text:
+        return text
+    text = _SECRET_PARAMS.sub(lambda m: f"{m.group(1)}=[redacted]", text)
+    for value in _secret_values:
+        if value in text:
+            text = text.replace(value, "[redacted]")
+    return text
 _LEVELS = {"DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARNING": logging.WARNING,
            "WARN": logging.WARNING, "ERROR": logging.ERROR}
 _configured = False
@@ -27,7 +52,8 @@ class _Formatter(logging.Formatter):
     def format(self, record):
         name = record.name
         record.area = name[len(ROOT) + 1:] if name.startswith(ROOT + ".") else name
-        return super().format(record)
+        # Redacted after formatting, so tracebacks and exception text are covered too
+        return redact(super().format(record))
 
 
 def setup_logging() -> None:

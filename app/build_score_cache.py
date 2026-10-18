@@ -21,9 +21,9 @@ repeated runs lean.
 import json
 import re
 import time
-import sys
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.parse import urljoin, urlsplit
 
 import requests
 
@@ -45,6 +45,36 @@ SITEMAP_URL = "https://isitwokeornot.com/sitemaps/titles-1.xml"
 SITEMAP_TIMEOUT = 30          # seconds per attempt
 SITEMAP_ATTEMPTS = 2          # one retry - a single slow response shouldn't cost the whole run
 SITEMAP_RETRY_PAUSE = 15      # seconds between attempts
+
+
+# Only review pages on the site itself are ever requested. The sitemap is
+# external input: an entry (or a redirect) pointing at another host - a
+# router, a NAS, a cloud metadata address - must not turn Wokearr into a tool
+# that makes requests inside the user's network.
+ALLOWED_HOST = urlsplit(SITEMAP_URL).hostname
+MAX_REDIRECTS = 3
+
+
+def is_review_url(url: str) -> bool:
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return False
+    return parts.scheme == "https" and parts.hostname == ALLOWED_HOST and not parts.username and not parts.password
+
+
+def _get_review_page(url: str) -> requests.Response:
+    """GET that follows redirects only while they stay on isitwokeornot.com."""
+    for _ in range(MAX_REDIRECTS + 1):
+        r = requests.get(url, headers=HEADERS, timeout=15, allow_redirects=False)
+        if not r.is_redirect:
+            return r
+        target = urljoin(url, r.headers.get("Location", ""))
+        if not is_review_url(target):
+            log.warning("Not following redirect to another host: %s -> %s", url, target)
+            return r
+        url = target
+    return r
 
 
 class SitemapError(Exception):
@@ -102,7 +132,9 @@ def extract_one(url: str, lastmod: str | None) -> tuple[dict | None, str]:
     status is "ok". The status is kept per URL (see URL_STATE_FILE) so a page
     that yields no usable score isn't re-fetched on every single run."""
     try:
-        r = requests.get(url, headers=HEADERS, timeout=15)
+        r = _get_review_page(url)
+        if r.is_redirect:
+            return None, "foreign_redirect"
         if r.status_code >= 400:
             return None, f"http_{r.status_code}"
         html = r.text
@@ -197,6 +229,11 @@ def build_cache(cache: dict, on_progress=None, skip_existing: bool = True,
     pages at that point.
     """
     entries = get_title_urls()
+    foreign = [u for u, _ in entries if not is_review_url(u)]
+    if foreign:
+        log.warning("Ignoring %d sitemap entries that don't point to %s, e.g. %s",
+                    len(foreign), ALLOWED_HOST, foreign[0][:120])
+        entries = [(u, lm) for u, lm in entries if is_review_url(u)]
     sitemap_total = len(entries)
     url_state = load_url_state()
     now = time.time()

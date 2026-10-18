@@ -5,10 +5,50 @@ tags on `ghcr.io/jake-double-one/wokearr`.
 
 ## [Unreleased]
 
+### Security
+- **The Plex token could leak.** Plex image URLs carry the token, and when
+  such a request failed, the error message quoted the full URL - into the
+  container log, the run protocol (visible in the UI) and notifications.
+  Secrets (Plex token, login password, notification tokens, and anything
+  passed as `token=`/`password=`/`apikey=` in a URL) are now removed from all
+  three, tracebacks included. A stored run protocol is cleaned on the first
+  start.
+- **Cross-site requests:** with `AUTH_METHOD=none`, any web page the user
+  visited could start a rebuild, a push or the poster cleanup with a plain
+  cross-site POST. Requests that change something now always need the
+  `X-Requested-With` header the UI sends, with or without a login.
+- **Server-side request forgery:** review pages are only fetched from
+  `https://isitwokeornot.com`; sitemap entries and redirects pointing
+  elsewhere (e.g. into the local network) are ignored.
+- Review links in the grid are only ever `https://isitwokeornot.com/...`
+  links, never another scheme such as `javascript:`.
+- Content Security Policy (per-request nonce for the one inline script),
+  `X-Content-Type-Options: nosniff` and `Referrer-Policy: same-origin` on
+  every response.
+- Dependencies: Pillow 12.1.1 → 12.3.0 (16 known vulnerabilities in image and
+  font handling), requests 2.32.3 → 2.34.2 (2), plexapi 4.18.2 → 4.18.3.
+- `docker-compose.yaml` sets `no-new-privileges`.
+- `python app.py` (local development) no longer starts Werkzeug's debugger on
+  all interfaces; it listens on 127.0.0.1, debugger only with `FLASK_DEBUG=1`.
+
+### Added
+- A test suite (`tests/`, pytest) and a GitHub Actions workflow that runs it
+  together with a lint and a dependency audit on every pull request.
+  Dependabot proposes updates for packages, the base image and actions weekly.
+
 ### Changed
+- Finished background jobs are no longer kept forever in memory; the latest
+  50 stay available.
+- An invalid poster id answers 404 instead of an error.
 - The README points to the companion userscript,
   [isitwokeornot-tampermonkey-companion](https://github.com/Jake-double-one/isitwokeornot-tampermonkey-companion):
   isitwokeornot.com ↔ Seerr/Radarr/Sonarr buttons and a Woke Score row in Seerr.
+
+### Upgrade note
+If a request to Plex ever failed and notifications were on, the Plex token
+may have been sent along. To renew it, sign out all devices in your Plex
+account settings and update `PLEX_TOKEN`. Scripts calling the API directly
+need the header `X-Requested-With: wokearr` for POST requests.
 
 ## [v0.4.1] – 2026-09-26
 

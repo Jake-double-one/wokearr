@@ -247,15 +247,38 @@ Also, whenever a login is active:
   15 minutes, further attempts from it are refused until the oldest failure
   has aged out. Every failure is logged in a form fail2ban/CrowdSec can
   parse: `WARNING [auth] Failed login for user 'x' from 203.0.113.5`
-- **CSRF protection:** requests that change something need a header the UI
-  sends and foreign pages can't, so another website can't trigger actions
-  with your browser's stored login.
 - With `forms`, the session cookie is HttpOnly and SameSite=Lax, and Secure
   whenever the page is served over HTTPS (also behind a proxy that sends
   `X-Forwarded-Proto`). Changing `AUTH_USERNAME` or `AUTH_PASSWORD` ends all
   existing sessions. The signing key lives in `/data/session_secret`, so a
   restart doesn't log you out.
 - `/healthz` stays reachable without a login, for Docker's health check.
+- The rate limit counts the address that connects to Wokearr. Behind a reverse
+  proxy that is the proxy for everyone, so a burst of failed logins locks out
+  all users for up to 15 minutes - the price of not trusting
+  `X-Forwarded-For`, which anyone can fake.
+
+### Security
+
+Always on, with or without a login:
+
+- **CSRF protection:** requests that change something need the header
+  `X-Requested-With: wokearr`, which the UI sends and other websites can't.
+  Without it, any page you visit could start a rebuild, a push or the poster
+  cleanup in the background. Scripting the API? Add
+  `-H "X-Requested-With: wokearr"`.
+- **No secrets in logs or messages:** the Plex token, the login password and
+  notification tokens are removed from the container log, the run protocol
+  and notifications - also from error messages that quote a failing URL.
+- **Only isitwokeornot.com is fetched:** sitemap entries or redirects that
+  point anywhere else are ignored, so Wokearr can't be made to send requests
+  into your network.
+- **Browser hardening:** a Content Security Policy, `nosniff` and a strict
+  referrer policy. Framing stays allowed, so dashboards like Organizr or
+  Homarr can embed Wokearr.
+
+Keep port 5005 inside your network or behind a reverse proxy with HTTPS - with
+`AUTH_METHOD=none`, anyone who reaches it can use Wokearr.
 
 ## Notifications
 

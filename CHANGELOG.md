@@ -3,7 +3,7 @@
 All notable changes to Wokearr, newest first. Version numbers match the image
 tags on `ghcr.io/jake-double-one/wokearr`.
 
-## [Unreleased]
+## [v0.5.0] – 2026-10-18
 
 ### Security
 - **The Plex token could leak.** Plex image URLs carry the token, and when
@@ -40,8 +40,10 @@ tags on `ghcr.io/jake-double-one/wokearr`.
 - A test suite (`tests/`, pytest) and a GitHub Actions workflow that runs it
   together with a lint and a dependency audit on every pull request.
   Dependabot proposes updates for packages, the base image and actions weekly.
-  A further CI job builds the image and starts it in the scenarios below
-  (update from root, read-only mount, `PUID=0`, `user:`).
+  A further CI job builds the image and starts it as users run it (update
+  from a version that ran as root, read-only mount, `PUID=0`, `user:`).
+- Every pull request gets a test image, `ghcr.io/jake-double-one/wokearr:pr-<number>`,
+  to try a change on a real installation before it reaches `latest`.
 - `licenses.txt`: the licenses of all libraries and other components in the
   image, with full texts - also in the image under `/usr/share/doc/wokearr/`.
 
@@ -345,7 +347,7 @@ ready-built image on GHCR for Docker Compose and Portainer.
 Note: the tag `v0.2` points at the same commit as `v0.2.2` – an accidental
 duplicate, not a separate release.
 
-[Unreleased]: https://github.com/Jake-double-one/wokearr/compare/v0.4.1...main
+[v0.5.0]: https://github.com/Jake-double-one/wokearr/compare/v0.4.1...v0.5.0
 [v0.4.1]: https://github.com/Jake-double-one/wokearr/compare/v0.4.0...v0.4.1
 [v0.4.0]: https://github.com/Jake-double-one/wokearr/compare/v0.3.2...v0.4.0
 [v0.3.2]: https://github.com/Jake-double-one/wokearr/compare/v0.3.1...v0.3.2

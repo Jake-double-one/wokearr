@@ -114,5 +114,9 @@
   "auth.required": "Login required.",
   "auth.csrf": "Request rejected: security header missing. Please reload the page.",
   "auth.config_error_title": "Login misconfigured",
-  "auth.config_error_hint": "Wokearr stays locked until this is fixed in the environment variables and the container is redeployed."
+  "auth.config_error_hint": "Wokearr stays locked until this is fixed in the environment variables and the container is redeployed.",
+  "notice.run_as.chown_failed": "Wokearr is still running as root: the data folder {data_dir} could not be handed over to user {user} (read-only or network mount?). Everything works. To switch, give the folder to {user} on the host or set PUID/PGID to its owner - or set PUID=0 to keep root and hide this notice.",
+  "notice.run_as.not_writable": "Wokearr is still running as root: user {user} cannot write to the data folder {data_dir}. Everything works. To switch, set PUID/PGID to the folder's owner on the host - or set PUID=0 to keep root and hide this notice.",
+  "notice.run_as.invalid_ids": "Wokearr is running as root because PUID/PGID are not numbers ({user}). Everything works. Correct them - or set PUID=0 to keep root and hide this notice.",
+  "notice.more": "Details"
 }

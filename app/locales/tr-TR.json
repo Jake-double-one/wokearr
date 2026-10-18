@@ -114,5 +114,9 @@
   "auth.required": "Giriş gerekli.",
   "auth.csrf": "İstek reddedildi: güvenlik başlığı eksik. Lütfen sayfayı yeniden yükleyin.",
   "auth.config_error_title": "Giriş yanlış yapılandırılmış",
-  "auth.config_error_hint": "Ortam değişkenlerinde düzeltilip kapsayıcı yeniden dağıtılana kadar Wokearr kilitli kalır."
+  "auth.config_error_hint": "Ortam değişkenlerinde düzeltilip kapsayıcı yeniden dağıtılana kadar Wokearr kilitli kalır.",
+  "notice.run_as.chown_failed": "Wokearr hâlâ root olarak çalışıyor: {data_dir} veri klasörü {user} kullanıcısına devredilemedi (salt okunur veya ağ bağlantısı?). Her şey çalışıyor. Geçiş için klasörü ana makinede {user} kullanıcısına verin veya PUID/PGID'yi sahibine ayarlayın – ya da root olarak kalmak ve bu bildirimi gizlemek için PUID=0 ayarlayın.",
+  "notice.run_as.not_writable": "Wokearr hâlâ root olarak çalışıyor: {user} kullanıcısı {data_dir} veri klasörüne yazamıyor. Her şey çalışıyor. Geçiş için PUID/PGID'yi ana makinedeki klasör sahibine ayarlayın – ya da root olarak kalmak ve bu bildirimi gizlemek için PUID=0 ayarlayın.",
+  "notice.run_as.invalid_ids": "PUID/PGID sayı olmadığı için ({user}) Wokearr root olarak çalışıyor. Her şey çalışıyor. Bunları düzeltin – ya da root olarak kalmak ve bu bildirimi gizlemek için PUID=0 ayarlayın.",
+  "notice.more": "Ayrıntılar"
 }

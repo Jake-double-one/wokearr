@@ -95,6 +95,7 @@ e.g. to `:v0.1.0`.
 | `AUTH_METHOD` | no | `none` | Login in front of the UI: `none` \| `basic` (browser popup, e.g. for authentik) \| `forms` (login page). See [Authentication](#authentication) |
 | `AUTH_USERNAME` / `AUTH_PASSWORD` | with `basic`/`forms` | – | The login, shared by `basic` and `forms`. Instead of `AUTH_PASSWORD`, `AUTH_PASSWORD_FILE` can point to a file (Docker secrets) |
 | `LOG_LEVEL` | no | `INFO` | Detail of the container log: `DEBUG` \| `INFO` \| `WARNING` \| `ERROR`. `DEBUG` adds a line per title (see [Container log](#container-log)) |
+| `PUID` / `PGID` | no | `1000` | User/group Wokearr runs as, and who owns the files in `/data`. `PUID=0` runs as root. See [Running without root](#running-without-root) |
 
 \* Without these two variables, the app runs in demo mode.
 
@@ -280,6 +281,23 @@ Always on, with or without a login:
 Keep port 5005 inside your network or behind a reverse proxy with HTTPS - with
 `AUTH_METHOD=none`, anyone who reaches it can use Wokearr.
 
+### Running without root
+
+Wokearr runs as user `1000:1000`, not as root. On startup the container
+hands `/data` to that user once - also for data from older versions, which
+belonged to root. **Nothing to do:** an update (Watchtower included) switches
+over by itself and says so once in the container log.
+
+- Different user, e.g. to match your other containers: set `PUID`/`PGID`.
+- With a bind mount, the files on the host belong to `1000:1000` from then on.
+- If `/data` can't be handed over (read-only or network mount, NFS with
+  `root_squash`), Wokearr keeps running as root as before - nothing breaks.
+  The log and a notice in the web UI then say what to change: give the folder
+  to the user on the host, set `PUID`/`PGID` to its owner, or `PUID=0` to stay
+  root and hide the notice.
+- `user: "1000:1000"` in compose works too; the container then skips the
+  handover, so `/data` must already be writable for that user.
+
 ## Notifications
 
 With `NOTIFY_URL` set, the autopilot sends a message when a stage fails and/or
@@ -403,4 +421,6 @@ Independent of Wokearr - install either one or both. Setup is in the
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE). The libraries and other components in the image
+and their licenses are listed in [licenses.txt](licenses.txt) (also in the image
+under `/usr/share/doc/wokearr/`).

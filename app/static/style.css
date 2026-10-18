@@ -51,6 +51,19 @@ body {
   border-radius: 4px;
 }
 
+/* Something the user has to act on (see RUN_AS_NOTICE in app.py) */
+.system-notice {
+  margin: 12px 20px 0;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  background: color-mix(in srgb, var(--yellow) 12%, var(--panel));
+  border: 1px solid var(--yellow);
+  border-radius: 6px;
+}
+.system-notice a { color: var(--yellow); }
+
 .btn {
   border: none;
   padding: 8px 14px;
@@ -334,6 +347,7 @@ main { padding: 20px; }
 
 /* Mobile: Topbar stapeln, Grid enger, Karten-Overlay immer sichtbar (kein Hover auf Touch) */
 @media (max-width: 680px) {
+  .system-notice { margin: 10px 14px 0; }
   .topbar { flex-direction: column; align-items: stretch; padding: 10px 14px; }
   .topbar-actions { width: 100%; }
   .action-group { width: 100%; }

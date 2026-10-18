@@ -114,5 +114,9 @@
   "auth.required": "Inicio de sesión requerido.",
   "auth.csrf": "Solicitud rechazada: falta la cabecera de seguridad. Recarga la página.",
   "auth.config_error_title": "Inicio de sesión mal configurado",
-  "auth.config_error_hint": "Wokearr permanece bloqueado hasta que se corrija en las variables de entorno y se vuelva a desplegar el contenedor."
+  "auth.config_error_hint": "Wokearr permanece bloqueado hasta que se corrija en las variables de entorno y se vuelva a desplegar el contenedor.",
+  "notice.run_as.chown_failed": "Wokearr sigue ejecutándose como root: la carpeta de datos {data_dir} no se pudo asignar al usuario {user} (¿montaje de solo lectura o de red?). Todo funciona. Para cambiarlo, asigna la carpeta a {user} en el host o ajusta PUID/PGID a su propietario, o pon PUID=0 para seguir como root y ocultar este aviso.",
+  "notice.run_as.not_writable": "Wokearr sigue ejecutándose como root: el usuario {user} no puede escribir en la carpeta de datos {data_dir}. Todo funciona. Para cambiarlo, ajusta PUID/PGID al propietario de la carpeta en el host, o pon PUID=0 para seguir como root y ocultar este aviso.",
+  "notice.run_as.invalid_ids": "Wokearr se ejecuta como root porque PUID/PGID no son números ({user}). Todo funciona. Corrígelos, o pon PUID=0 para seguir como root y ocultar este aviso.",
+  "notice.more": "Detalles"
 }

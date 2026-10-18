@@ -294,6 +294,26 @@ Port 5005 im eigenen Netz lassen oder hinter einen Reverse Proxy mit HTTPS
 stellen – mit `AUTH_METHOD=none` kann jeder, der ihn erreicht, Wokearr
 bedienen.
 
+### Ohne root ausführen
+
+Wokearr läuft als Benutzer `1000:1000`, nicht als root. Beim Start übergibt
+der Container `/data` einmalig an diesen Benutzer – auch die Daten älterer
+Versionen, die root gehörten. **Nichts zu tun:** Ein Update (auch per
+Watchtower) stellt von selbst um und meldet das einmal im Container-Log.
+
+- Anderer Benutzer, z. B. passend zu den übrigen Containern: `PUID`/`PGID`
+  setzen.
+- Bei einem Bind-Mount gehören die Dateien auf dem Host ab dann `1000:1000`.
+- Lässt sich `/data` nicht übergeben (schreibgeschützt, Netzlaufwerk, NFS mit
+  `root_squash`), läuft Wokearr wie bisher als root weiter – nichts geht
+  kaputt. Log und ein Hinweis im Webinterface sagen dann, was zu ändern ist:
+  den Ordner auf dem Host dem Benutzer geben, `PUID`/`PGID` auf seinen
+  Besitzer setzen oder `PUID=0`, um bei root zu bleiben und den Hinweis
+  auszublenden.
+- `user: "1000:1000"` in der Compose geht auch; der Container überspringt
+  dann die Übergabe, `/data` muss für diesen Benutzer also schon beschreibbar
+  sein.
+
 ## Benachrichtigungen
 
 Mit gesetzter `NOTIFY_URL` meldet sich der Autopilot, wenn eine Stufe
@@ -423,4 +443,6 @@ in der [README des Companions](https://github.com/Jake-double-one/isitwokeornot-
 
 ## Lizenz
 
-MIT, siehe [LICENSE](LICENSE).
+MIT, siehe [LICENSE](LICENSE). Die Bibliotheken und übrigen Bestandteile des
+Images samt ihren Lizenzen stehen in [licenses.txt](licenses.txt) (auch im Image
+unter `/usr/share/doc/wokearr/`).

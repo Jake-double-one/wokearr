@@ -4,9 +4,14 @@ on:
   push:
     branches: ["main"]
     tags: ["v*"]
+  # Every pull request gets a test image, ghcr.io/...:pr-<number>, to try a
+  # change on a real installation before it reaches "latest"
+  pull_request:
 
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}
+  # Forks and Dependabot get a read-only token on pull requests: build only
+  PUSH: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]') }}
 
 jobs:
   build-and-push:
@@ -22,6 +27,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
+        if: env.PUSH == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -41,17 +47,18 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=pr
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
+          push: ${{ env.PUSH == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # metadata-action resolves this to the semver on tag pushes and to
-          # "latest" on the default branch - exactly the distinction the
-          # footer shows.
+          # metadata-action resolves this to the semver on tag pushes, to
+          # "latest" on the default branch and to "pr-<number>" on pull
+          # requests - exactly the distinction the footer shows.
           build-args: |
             APP_VERSION=${{ steps.meta.outputs.version }}
             BUILD_DATE=${{ steps.build_date.outputs.value }}

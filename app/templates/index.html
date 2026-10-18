@@ -86,7 +86,7 @@
   <span id="toast-text">...</span>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
   window.__DEMO__ = {{ demo | tojson }};
   window.__BADGE_LABEL_STYLE__ = {{ badge_label_style | tojson }};
   window.__I18N__ = {{ i18n | tojson }};

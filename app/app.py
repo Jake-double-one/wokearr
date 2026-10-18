@@ -12,7 +12,7 @@ import json
 import logging
 import re
 import os
-import sys
+import secrets
 import threading
 import time
 import uuid
@@ -22,7 +22,7 @@ from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 import requests
 from croniter import croniter
-from flask import Flask, jsonify, request, send_file, render_template
+from flask import Flask, abort, g, jsonify, request, send_file, render_template
 from PIL import Image
 
 from badge import (  # noqa: E402
@@ -33,7 +33,7 @@ from badge import (  # noqa: E402
     COLOR_SCHEMES,
     DEFAULT_COLOR_SCHEME,
 )
-from logsetup import setup_logging, get_logger
+from logsetup import setup_logging, get_logger, redact, register_secret
 from auth import Auth
 import build_score_cache as bsc
 import notify
@@ -55,6 +55,7 @@ log_notify = get_logger("notify")
 # ---------------------------------------------------------------------------
 PLEX_URL = os.environ.get("PLEX_URL", "").rstrip("/")
 PLEX_TOKEN = os.environ.get("PLEX_TOKEN", "")
+register_secret(PLEX_TOKEN)
 LIBRARY_SECTIONS = [s.strip() for s in os.environ.get("LIBRARY_SECTIONS", "Filme,Serien").split(",") if s.strip()]
 BADGE_POSITION = os.environ.get("BADGE_POSITION", "top-right")
 BADGE_LABEL_STYLE = os.environ.get("BADGE_LABEL_STYLE", "percent")
@@ -203,6 +204,12 @@ _notify_url = os.environ.get("NOTIFY_URL", "").strip()
 if _notify_url:
     try:
         NOTIFY_TARGET = notify.parse_url(_notify_url)
+        # Not the ntfy topic: it's often an ordinary word and never part of a URL
+        # in an error message (it travels in the JSON body)
+        for _secret in (*NOTIFY_TARGET.headers.values(), *(NOTIFY_TARGET.auth or ())):
+            register_secret(_secret)
+            register_secret((_secret or "").split(" ")[-1])  # "Bearer <token>" -> the token alone
+        register_secret(_notify_url)
     except ValueError as e:
         log_config.error("Invalid NOTIFY_URL - notifications disabled: %s", e)
 NOTIFY_ON_CHOICES = {"error", "changes"}
@@ -244,10 +251,42 @@ RUN_HISTORY_MAX_ENTRIES = 500
 
 app = Flask(__name__)
 app.jinja_env.globals["t"] = t
+
+
+@app.before_request
+def _csp_nonce():
+    g.csp_nonce = secrets.token_urlsafe(16)
+
+
+app.jinja_env.globals["csp_nonce"] = lambda: getattr(g, "csp_nonce", "")
+
+
+@app.after_request
+def _security_headers(resp):
+    """Defense in depth against XSS and content sniffing. The only inline
+    script (the translations and settings in index.html) carries a per-request
+    nonce; styles stay allowed inline for the band colours and small style
+    attributes. Framing stays allowed, since dashboards like Organizr or
+    Homarr embed *arr apps in an iframe."""
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("Referrer-Policy", "same-origin")
+    resp.headers.setdefault("Content-Security-Policy", "; ".join((
+        "default-src 'self'",
+        f"script-src 'self' 'nonce-{getattr(g, 'csp_nonce', '')}'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: https://isitwokeornot.com",
+        "connect-src 'self'",
+        "object-src 'none'",
+        "base-uri 'none'",
+        "form-action 'self'",
+    )))
+    return resp
+
 app.jinja_env.globals["language"] = LANGUAGE
 # Optional login (AUTH_METHOD none/basic/forms) - see auth.py
 auth = Auth(app, DATA_DIR, t)
 JOBS = {}  # job_id -> {"state": "running"/"done"/"error", "progress": [n, total], "log": [...]}
+JOBS_KEEP_FINISHED = 50
 
 _rebuild_lock = threading.Lock()
 _last_rebuild_started = 0.0  # epoch seconds - protects isitwokeornot.com from too-frequent fetches
@@ -295,8 +334,11 @@ REVIEW_LINK_UTM = {"utm_source": "wokearr", "utm_medium": "referral", "utm_campa
 
 
 def _with_utm(url: str | None) -> str | None:
-    if not url:
-        return url
+    """Review link for the grid. Only ever an https link to isitwokeornot.com -
+    the URL comes from their sitemap, and anything else (a javascript: URL,
+    another host) must not end up as a clickable link in the UI."""
+    if not url or not bsc.is_review_url(url):
+        return None
     parts = urlsplit(url)
     query = dict(parse_qsl(parts.query))
     query.update(REVIEW_LINK_UTM)
@@ -575,7 +617,8 @@ def _describe(exc: BaseException) -> str:
     cause = exc.__cause__
     if cause is not None and cause is not exc:
         text += f" (caused by {type(cause).__name__}: {cause})"
-    return text
+    # The message often contains the failing URL, and Plex URLs carry the token
+    return redact(text)
 
 
 def _root_error(exc: BaseException) -> BaseException:
@@ -1235,6 +1278,26 @@ def _tz_is_known(name: str) -> bool:
         return False
 
 
+def _scrub_run_history() -> None:
+    """Versions up to 0.4.1 could store a failed request's URL - Plex token
+    included - in the run protocol (and send it in a notification). Rewrites
+    the stored protocol once with secrets removed, and says so."""
+    if not RUN_HISTORY_FILE.exists():
+        return
+    try:
+        raw = RUN_HISTORY_FILE.read_text(encoding="utf-8")
+        cleaned = redact(raw)
+        if cleaned != raw:
+            json.loads(cleaned)  # never write back something that no longer parses
+            RUN_HISTORY_FILE.write_text(cleaned, encoding="utf-8")
+            log_history.warning("Removed credentials (e.g. the Plex token) from the stored run protocol. "
+                                "If notifications were enabled, they may have contained it as well - "
+                                "consider signing out all Plex devices to renew the token.")
+    except Exception as e:
+        log_history.warning("Could not check the run protocol for stored credentials: %s", e)
+
+
+_scrub_run_history()
 _log_startup()
 if AUTO_SYNC_CRON:
     threading.Thread(target=_auto_sync_loop, daemon=True).start()
@@ -1365,6 +1428,8 @@ def api_poster(rating_key):
         resp.headers["Cache-Control"] = "no-store"
         return resp
 
+    if not rating_key.isdigit():
+        abort(404)
     plex = get_plex()
     item = plex.fetchItem(int(rating_key))
     poster_url = plex.url(item.thumb, includeToken=True)
@@ -1385,6 +1450,11 @@ def _start_job(trigger: str, stage: str, work, total: int = 0, initial_log=None)
     container, summarized in the user's language in the browser."""
     job_id = str(uuid.uuid4())
     job = {"state": "running", "progress": [0, total], "log": list(initial_log or [])}
+    # Finished jobs are only polled for a few seconds - keep the latest ones
+    # instead of every job since the container started
+    finished = [k for k, v in JOBS.items() if v.get("state") != "running"]
+    for old_id in finished[:max(0, len(finished) - JOBS_KEEP_FINISHED)]:
+        JOBS.pop(old_id, None)
     JOBS[job_id] = job
 
     def job_log(msg):
@@ -1530,4 +1600,7 @@ def api_job(job_id):
 if __name__ == "__main__":
     # Only for local development outside of Docker - gunicorn runs in the container (see Dockerfile)
     log_config.info("Demo mode: %s", demo_mode())
-    app.run(host="0.0.0.0", port=5005, debug=True)
+    # Local only, and Werkzeug's debugger (which runs code from the browser)
+    # only when asked for explicitly - never on the network by default
+    app.run(host=os.environ.get("WOKEARR_DEV_HOST", "127.0.0.1"), port=5005,
+            debug=os.environ.get("FLASK_DEBUG") == "1")

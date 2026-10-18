@@ -28,6 +28,10 @@ Also, whenever a login is active:
   header the UI sends. A foreign page can't set it without a CORS preflight,
   so it can't trigger actions with the browser's stored login (CSRF) - which
   matters most for basic, where the browser sends the credentials on its own.
+
+The CSRF check applies with AUTH_METHOD=none as well: without it, any web page
+the user visits could fire a plain cross-site POST at Wokearr on the LAN and
+start a rebuild, a push or the poster cleanup.
 """
 import datetime
 import hashlib
@@ -44,7 +48,7 @@ from flask import Response, jsonify, redirect, render_template, request, session
 from flask.sessions import SecureCookieSessionInterface
 from markupsafe import escape
 
-from logsetup import get_logger
+from logsetup import get_logger, register_secret
 
 log = get_logger("auth")
 
@@ -128,6 +132,7 @@ class _SessionInterface(SecureCookieSessionInterface):
 class Auth:
     def __init__(self, app, data_dir: Path, translate, environ=os.environ):
         self.method, self.username, self.password, self.error = load_config(environ)
+        register_secret(self.password)
         self._login_requested_without_method = self.method == "none" and bool(
             environ.get("AUTH_USERNAME") or environ.get("AUTH_PASSWORD") or environ.get("AUTH_PASSWORD_FILE")
         )
@@ -258,8 +263,10 @@ class Auth:
             return None
         if self.error:
             return None if endpoint in ("static", "favicon") else self._config_error_response()
-        if self.method == "none" or endpoint in PUBLIC_ENDPOINTS:
+        if endpoint in PUBLIC_ENDPOINTS:
             return None
+        if self.method == "none":
+            return self._check_csrf()
 
         if self.method == "basic":
             denied = self._check_basic()
@@ -271,6 +278,9 @@ class Auth:
             target = request.full_path if request.query_string else request.path
             return redirect(url_for("login", next=target))
 
+        return self._check_csrf()
+
+    def _check_csrf(self):
         if request.method not in SAFE_METHODS and request.headers.get(CSRF_HEADER) != CSRF_VALUE:
             _, who = self._client()
             log.warning("Rejected %s %s from %s: %s header missing (possible cross-site request).",

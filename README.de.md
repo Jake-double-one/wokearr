@@ -258,16 +258,41 @@ Außerdem, sobald eine Anmeldung aktiv ist:
   der älteste Fehlversuch abgelaufen ist. Jeder Fehlversuch landet in einer
   Form im Log, die fail2ban/CrowdSec auswerten können:
   `WARNING [auth] Failed login for user 'x' from 203.0.113.5`
-- **CSRF-Schutz:** Anfragen, die etwas ändern, brauchen einen Header, den die
-  Oberfläche mitschickt und fremde Seiten nicht setzen können – eine andere
-  Webseite kann also keine Aktionen mit der gespeicherten Anmeldung eures
-  Browsers auslösen.
 - Bei `forms` ist das Sitzungs-Cookie HttpOnly und SameSite=Lax, und Secure,
   sobald die Seite über HTTPS kommt (auch hinter einem Proxy, der
   `X-Forwarded-Proto` setzt). Eine Änderung von `AUTH_USERNAME` oder
   `AUTH_PASSWORD` beendet alle bestehenden Sitzungen. Der Signierschlüssel
   liegt in `/data/session_secret`, ein Neustart meldet also niemanden ab.
 - `/healthz` bleibt ohne Anmeldung erreichbar, für den Docker-Healthcheck.
+- Die Sperre zählt die Adresse, die sich mit Wokearr verbindet. Hinter einem
+  Reverse Proxy ist das für alle der Proxy – eine Serie von Fehlversuchen
+  sperrt dann alle Nutzer für bis zu 15 Minuten aus. Das ist der Preis dafür,
+  `X-Forwarded-For` nicht zu vertrauen, denn das kann jeder fälschen.
+
+### Sicherheit
+
+Immer aktiv, mit oder ohne Anmeldung:
+
+- **CSRF-Schutz:** Anfragen, die etwas ändern, brauchen den Header
+  `X-Requested-With: wokearr`, den die Oberfläche mitschickt und andere
+  Webseiten nicht setzen können. Ohne ihn könnte jede Seite, die ihr besucht,
+  im Hintergrund einen Neuaufbau, ein Übertragen oder das Poster-Aufräumen
+  starten. Wer die API per Skript nutzt: `-H "X-Requested-With: wokearr"`
+  ergänzen.
+- **Keine Geheimnisse in Logs und Meldungen:** Plex-Token, Anmelde-Passwort
+  und Benachrichtigungs-Tokens werden aus Container-Log, Lauf-Protokoll und
+  Benachrichtigungen entfernt – auch aus Fehlermeldungen, die eine
+  fehlgeschlagene URL zitieren.
+- **Abgerufen wird nur isitwokeornot.com:** Sitemap-Einträge oder
+  Weiterleitungen auf andere Adressen werden ignoriert. Wokearr lässt sich so
+  nicht dazu bringen, Anfragen in euer Netz zu schicken.
+- **Browser-Härtung:** Content Security Policy, `nosniff` und eine strenge
+  Referrer-Policy. Einbetten in einen Frame bleibt erlaubt, damit Dashboards
+  wie Organizr oder Homarr Wokearr anzeigen können.
+
+Port 5005 im eigenen Netz lassen oder hinter einen Reverse Proxy mit HTTPS
+stellen – mit `AUTH_METHOD=none` kann jeder, der ihn erreicht, Wokearr
+bedienen.
 
 ## Benachrichtigungen
 

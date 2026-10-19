@@ -2,6 +2,7 @@
 URLs are refused, responses carry security headers."""
 import json
 import logging
+import threading
 
 import pytest
 import requests
@@ -185,3 +186,191 @@ def test_run_as_notice_escapes_bad_ids(make_app):
     module = make_app(WOKEARR_RUN_AS_NOTICE="invalid_ids", PUID="<b>x</b>")
     html = module.app.test_client().get("/").get_data(as_text=True)
     assert "&lt;b&gt;x&lt;/b&gt;" in html and "<b>x</b>" not in html
+
+
+def _page(body: str, size: int | None = None):
+    """A streamed requests.Response stand-in for the score sync."""
+    raw = body.encode("utf-8")
+    resp = MagicMock(status_code=200, is_redirect=False, encoding="utf-8")
+    resp.iter_content = lambda chunk_size: (raw[i:i + chunk_size] for i in range(0, len(raw), chunk_size))
+    return resp
+
+
+REVIEW_PAGE = ('<script type="application/ld+json">{"@type":"Review","reviewRating":{"ratingValue":%s},'
+               '"itemReviewed":{"name":%s}}</script> themoviedb.org/movie/1')
+
+
+@pytest.mark.parametrize("raw, expected", [
+    ("86", 86), ('"86"', 86), ("86.0", 86), ("0", 0), ("100", 100),
+    ('"86<b>"', None), ("150", None), ("-1", None), ("86.5", None), ("true", None), ("null", None), ('""', None),
+])
+def test_scores_from_review_pages_are_validated(make_app, raw, expected):
+    make_app()
+    import build_score_cache as bsc
+    bsc.SLEEP_SECONDS = 0
+    with patch.object(bsc.requests, "get", return_value=_page(REVIEW_PAGE % (raw, '"X"'))):
+        entry, status = bsc.extract_one("https://isitwokeornot.com/movie/x", None)
+    if expected is None:
+        assert entry is None and status == "bad_review"
+    else:
+        assert status == "ok" and entry["score"] == expected and type(entry["score"]) is int
+
+
+def test_review_page_shapes_never_crash_the_sync(make_app):
+    make_app()
+    import build_score_cache as bsc
+    bsc.SLEEP_SECONDS = 0
+    pages = {
+        "array": '<script type="application/ld+json">[{"@type":"Review"}]</script>',
+        "scalar": '<script type="application/ld+json">42</script>',
+        "no_rating": '<script type="application/ld+json">{"@type":"Review"}</script> themoviedb.org/movie/1',
+        "item_not_object": (REVIEW_PAGE % ("5", "5")).replace('{"name":5}', "5"),
+    }
+    for name, html in pages.items():
+        with patch.object(bsc.requests, "get", return_value=_page(html)):
+            entry, status = bsc.extract_one("https://isitwokeornot.com/movie/x", None)
+        assert status in ("no_review", "bad_review", "ok"), name
+        if entry:
+            assert entry["title"] is None
+
+
+def test_titles_are_one_line_and_capped(make_app):
+    make_app()
+    import build_score_cache as bsc
+    bsc.SLEEP_SECONDS = 0
+    title = json.dumps("Evil\n2026-01-01 ERROR [auth] forged " + "x" * 500)
+    with patch.object(bsc.requests, "get", return_value=_page(REVIEW_PAGE % ("1", title))):
+        entry, _ = bsc.extract_one("https://isitwokeornot.com/movie/x", None)
+    assert "\n" not in entry["title"] and len(entry["title"]) == bsc.MAX_TITLE_LENGTH
+
+
+def test_oversized_review_page_is_a_request_error(make_app):
+    make_app()
+    import build_score_cache as bsc
+    bsc.SLEEP_SECONDS = 0
+    with patch.object(bsc, "MAX_PAGE_BYTES", 1000), \
+            patch.object(bsc.requests, "get", return_value=_page("x" * 5000)):
+        assert bsc.extract_one("https://isitwokeornot.com/movie/x", None) == (None, "request_error")
+
+
+def test_log_lines_cannot_be_forged_with_line_breaks(make_app):
+    make_app()
+    import logsetup
+    stream = __import__("io").StringIO()
+    handler = logging.StreamHandler(stream)
+    handler.setFormatter(logsetup._Formatter("%(levelname)s %(message)s"))
+    logger = logging.getLogger("wokearr.test2")
+    logger.addHandler(handler)
+    logger.warning("Rendered: %s", "Title\nERROR [auth] Failed login for user 'x'")
+    try:
+        raise ValueError("boom")
+    except ValueError:
+        logger.exception("with traceback")
+    logger.removeHandler(handler)
+    lines = stream.getvalue().splitlines()
+    assert lines[0] == "WARNING Rendered: Title\\nERROR [auth] Failed login for user 'x'"
+    assert lines[1] == "ERROR with traceback" and "Traceback" in lines[2]
+
+
+def test_plex_token_travels_as_a_header_not_in_the_url(make_app, tmp_path):
+    wa = make_app(PLEX_URL="http://plex.local:32400", PLEX_TOKEN=TOKEN)
+    plex = MagicMock()
+    plex.url = lambda key, includeToken=None: f"http://plex.local:32400{key}"
+    plex.fetchItem.return_value = MagicMock(thumb="/library/metadata/7/thumb/1")
+    calls = []
+
+    def fake_get(url, **kw):
+        calls.append((url, kw.get("headers") or {}))
+        return _page("jpegdata")
+
+    with patch.object(wa, "get_plex", return_value=plex), patch.object(wa.requests, "get", side_effect=fake_get):
+        assert wa.app.test_client().get("/api/poster/7").status_code == 200
+        wa._poster_candidate_bytes(plex, MagicMock(key="/library/metadata/7/thumb/2"))
+        wa.fetch_original_poster_bytes(plex, MagicMock(ratingKey=8, thumb="/library/metadata/8/thumb/1",
+                                                       posters=lambda: []))
+    assert len(calls) == 3
+    for url, headers in calls:
+        assert TOKEN not in url and headers.get("X-Plex-Token") == TOKEN
+
+
+def test_poster_candidates_on_private_addresses_are_ignored(make_app):
+    wa = make_app(PLEX_URL="http://plex.local:32400", PLEX_TOKEN=TOKEN)
+    resolved = {"image.tmdb.org": "151.101.1.1", "evil.example": "192.168.1.1", "meta.example": "169.254.169.254"}
+
+    def fake_getaddrinfo(host, port, **kw):
+        return [(None, None, None, None, (resolved.get(host, host), port))]
+
+    fetched = []
+    with patch.object(wa.socket, "getaddrinfo", side_effect=fake_getaddrinfo), \
+            patch.object(wa.requests, "get", side_effect=lambda url, **kw: fetched.append(url) or _page("img")):
+        for key in ("http://evil.example/p.jpg", "https://meta.example/latest", "http://127.0.0.1:32400/x",
+                    "https://user:pw@image.tmdb.org/x", "ftp://image.tmdb.org/x"):
+            assert wa._poster_candidate_bytes(MagicMock(), MagicMock(key=key)) is None, key
+        assert wa._poster_candidate_bytes(MagicMock(), MagicMock(key="https://image.tmdb.org/t/p/w500/a.jpg")) == b"img"
+    assert fetched == ["https://image.tmdb.org/t/p/w500/a.jpg"]
+
+
+def test_healthz_says_nothing_about_the_installation(make_app):
+    r = make_app(PLEX_URL="http://plex.local:32400", PLEX_TOKEN=TOKEN).app.test_client().get("/healthz")
+    assert r.get_json() == {"status": "ok"}
+
+
+def test_request_bodies_are_capped(make_app):
+    wa = make_app(PLEX_URL="http://plex.local:32400", PLEX_TOKEN=TOKEN)
+    r = wa.app.test_client().post("/api/apply", data="x" * (2 * 1024 * 1024), headers=CSRF,
+                                  content_type="application/json")
+    assert r.status_code == 413
+
+
+def test_jobs_run_one_at_a_time_and_a_flood_is_refused(make_app):
+    wa = make_app(PLEX_URL="http://plex.local:32400", PLEX_TOKEN=TOKEN)
+    release = threading.Event()
+    order = []
+
+    def slow(job, log):
+        order.append("first-start")
+        release.wait(5)
+        order.append("first-end")
+        return {}
+
+    def quick(job, log):
+        order.append("second")
+        return {}
+
+    first = wa._start_job("cleanup", "cleanup", slow)
+    second = wa._start_job("cleanup", "cleanup", quick)
+    assert first and second
+    for _ in range(wa.JOBS_MAX_WAITING):
+        wa._start_job("cleanup", "cleanup", quick)
+    assert wa._start_job("cleanup", "cleanup", quick) is None, "queue is full"
+    c = wa.app.test_client()
+    assert c.post("/api/sync-library", headers=CSRF).status_code == 429
+    release.set()
+    for _ in range(100):
+        if wa.JOBS[second]["state"] == "done" and wa._jobs_waiting == 0:
+            break
+        threading.Event().wait(0.05)
+    assert order[:3] == ["first-start", "first-end", "second"]
+    assert wa._jobs_waiting == 0
+
+
+def test_orphan_cleanup_waits_when_a_library_could_not_be_read(make_app):
+    wa = make_app(PLEX_URL="http://plex.local:32400", PLEX_TOKEN=TOKEN, LIBRARY_SECTIONS="Filme,Serien")
+    (wa.ORIGINALS_DIR / "999.jpg").write_bytes(b"old")
+    movie = MagicMock(ratingKey=1, title="A", guids=[MagicMock(id="tmdb://1")])
+    movies = MagicMock(type="movie"); movies.all.return_value = [movie]
+
+    def section(name):
+        if name == "Serien":
+            raise RuntimeError("renamed")
+        return movies
+
+    plex = MagicMock()
+    plex.library.section.side_effect = section
+    with patch.object(wa, "get_plex", return_value=plex):
+        stats = wa.sync_library()
+    assert stats["orphans_removed"] == 0 and (wa.ORIGINALS_DIR / "999.jpg").exists()
+    plex.library.section.side_effect = lambda name: movies
+    with patch.object(wa, "get_plex", return_value=plex):
+        stats = wa.sync_library()
+    assert stats["orphans_removed"] == 1 and not (wa.ORIGINALS_DIR / "999.jpg").exists()

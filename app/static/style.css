@@ -281,7 +281,13 @@ main { padding: 20px; }
 .run-details ul { margin: 4px 0 2px; padding-left: 16px; color: var(--muted); overflow-wrap: anywhere; }
 .run-details li { margin: 2px 0; }
 .footer-credits { line-height: 1.5; }
-.status-logout { color: var(--muted); opacity: 0.75; }
+.status-logout-form { display: inline; margin: 0; }
+/* A button that looks like the links around it */
+.status-logout {
+  background: none; border: 0; padding: 0; margin: 0;
+  font: inherit; cursor: pointer; text-decoration: underline;
+  color: var(--muted); opacity: 0.75;
+}
 .status-logout:hover { color: var(--text); opacity: 1; }
 
 /* Login page (AUTH_METHOD=forms) - a narrow centered panel like Radarr's */

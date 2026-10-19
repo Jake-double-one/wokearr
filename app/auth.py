@@ -28,6 +28,10 @@ Also, whenever a login is active:
   header the UI sends. A foreign page can't set it without a CORS preflight,
   so it can't trigger actions with the browser's stored login (CSRF) - which
   matters most for basic, where the browser sends the credentials on its own.
+- The login form carries a token tied to the session cookie, so a foreign
+  page can't post wrong passwords from a visitor's browser and lock their
+  address out. Logging out is a POST for the same reason; the cookie's
+  SameSite=Lax keeps a foreign page from sending it along.
 
 The CSRF check applies with AUTH_METHOD=none as well: without it, any web page
 the user visits could fire a plain cross-site POST at Wokearr on the LAN and
@@ -152,7 +156,7 @@ class Auth:
 
         app.before_request(self._gate)
         app.add_url_rule("/login", "login", self._login, methods=["GET", "POST"])
-        app.add_url_rule("/logout", "logout", self._logout)
+        app.add_url_rule("/logout", "logout", self._logout, methods=["GET", "POST"])
 
     @property
     def active(self) -> bool:
@@ -281,6 +285,8 @@ class Auth:
         return self._check_csrf()
 
     def _check_csrf(self):
+        if request.endpoint == "logout":
+            return None  # a plain form; protected by the session cookie's SameSite=Lax
         if request.method not in SAFE_METHODS and request.headers.get(CSRF_HEADER) != CSRF_VALUE:
             _, who = self._client()
             log.warning("Rejected %s %s from %s: %s header missing (possible cross-site request).",
@@ -326,6 +332,20 @@ padding:40px 16px;text-align:center">
 
     # -- login page (forms) ---------------------------------------------------
 
+    def _login_form(self, next_url: str, error: str | None = None, username: str = ""):
+        """The form always carries a fresh-enough token in the session; the
+        POST must bring it back (see _login_token_ok)."""
+        if not session.get("login_csrf"):
+            session["login_csrf"] = secrets.token_urlsafe(16)
+        return render_template("login.html", error=error, next=next_url, username=username,
+                               csrf=session["login_csrf"])
+
+    @staticmethod
+    def _login_token_ok() -> bool:
+        expected = session.get("login_csrf") or ""
+        return bool(expected) and hmac.compare_digest(request.form.get("csrf", "").encode("utf-8"),
+                                                      str(expected).encode("utf-8"))
+
     def _login(self):
         if self.method != "forms" or self.error:
             return redirect("/")
@@ -333,19 +353,23 @@ padding:40px 16px;text-align:center">
         if request.method == "GET":
             if self._session_valid():
                 return redirect(next_url)
-            return render_template("login.html", error=None, next=next_url, username="")
+            return self._login_form(next_url)
 
         ip, who = self._client()
         username = request.form.get("username", "")
+        if not self._login_token_ok():
+            # Not counted as a failed login: this is a foreign page posting
+            # into the user's browser, or a form left open past its session
+            session.pop("login_csrf", None)
+            return self._login_form(next_url, self.t("login.error_expired"), username), 400
         locked = self._seconds_locked(ip)
         if locked:
-            return render_template("login.html", error=self._locked_message(locked), next=next_url,
-                                   username=username), 429
+            return self._login_form(next_url, self._locked_message(locked), username), 429
         if not self._credentials_ok(username, request.form.get("password", "")):
             self._record_failure(ip, who, username)
             locked = self._seconds_locked(ip)
             error = self._locked_message(locked) if locked else self.t("login.error_invalid")
-            return render_template("login.html", error=error, next=next_url, username=username), 401
+            return self._login_form(next_url, error, username), 401
 
         self._clear_failures(ip)
         session.clear()
@@ -355,7 +379,7 @@ padding:40px 16px;text-align:center">
         return redirect(next_url)
 
     def _logout(self):
-        if self.method != "forms" or self.error:
+        if self.method != "forms" or self.error or request.method != "POST":
             return redirect("/")
         if self._session_valid():
             _, who = self._client()

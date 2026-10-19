@@ -78,7 +78,9 @@
     <span class="status-next" id="status-next-run" hidden></span>
     <span class="status-version" id="status-version"></span>
     {%- if show_logout %}
-    <a class="status-logout" href="{{ url_for('logout') }}">{{ t('auth.logout') }}</a>
+    <form class="status-logout-form" method="post" action="{{ url_for('logout') }}">
+      <button class="status-logout" type="submit">{{ t('auth.logout') }}</button>
+    </form>
     {%- endif %}
   </div>
   <div id="status-history" class="status-history" hidden></div>

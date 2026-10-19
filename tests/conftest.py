@@ -12,7 +12,7 @@ sys.path.insert(0, str(APP_DIR))
 
 _CONFIG_VARS = ("PLEX_URL", "PLEX_TOKEN", "AUTH_METHOD", "AUTH_USERNAME", "AUTH_PASSWORD",
                 "AUTH_PASSWORD_FILE", "AUTO_SYNC_CRON", "NOTIFY_URL", "NOTIFY_ON", "LANGUAGE",
-                "WOKEARR_RUN_AS_NOTICE", "PUID", "PGID")
+                "WOKEARR_RUN_AS_NOTICE", "PUID", "PGID", "LIBRARY_SECTIONS")
 
 
 @pytest.fixture

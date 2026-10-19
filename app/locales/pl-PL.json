@@ -118,5 +118,7 @@
   "notice.run_as.chown_failed": "Wokearr nadal działa jako root: nie udało się przekazać folderu danych {data_dir} użytkownikowi {user} (montowanie tylko do odczytu lub sieciowe?). Wszystko działa. Aby to zmienić, przekaż folder użytkownikowi {user} na hoście lub ustaw PUID/PGID na jego właściciela – albo ustaw PUID=0, aby pozostać przy root i ukryć tę informację.",
   "notice.run_as.not_writable": "Wokearr nadal działa jako root: użytkownik {user} nie może zapisywać w folderze danych {data_dir}. Wszystko działa. Aby to zmienić, ustaw PUID/PGID na właściciela folderu na hoście – albo ustaw PUID=0, aby pozostać przy root i ukryć tę informację.",
   "notice.run_as.invalid_ids": "Wokearr działa jako root, ponieważ PUID/PGID nie są liczbami ({user}). Wszystko działa. Popraw je – albo ustaw PUID=0, aby pozostać przy root i ukryć tę informację.",
-  "notice.more": "Szczegóły"
+  "notice.more": "Szczegóły",
+  "login.error_expired": "Strona logowania była otwarta zbyt długo. Spróbuj ponownie.",
+  "api.busy": "Wokearr jest zajęty innymi zadaniami. Spróbuj ponownie za chwilę."
 }

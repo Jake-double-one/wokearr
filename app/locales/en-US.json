@@ -118,5 +118,7 @@
   "notice.run_as.chown_failed": "Wokearr is still running as root: the data folder {data_dir} could not be handed over to user {user} (read-only or network mount?). Everything works. To switch, give the folder to {user} on the host or set PUID/PGID to its owner - or set PUID=0 to keep root and hide this notice.",
   "notice.run_as.not_writable": "Wokearr is still running as root: user {user} cannot write to the data folder {data_dir}. Everything works. To switch, set PUID/PGID to the folder's owner on the host - or set PUID=0 to keep root and hide this notice.",
   "notice.run_as.invalid_ids": "Wokearr is running as root because PUID/PGID are not numbers ({user}). Everything works. Correct them - or set PUID=0 to keep root and hide this notice.",
-  "notice.more": "Details"
+  "notice.more": "Details",
+  "login.error_expired": "The login page was open too long. Please try again.",
+  "api.busy": "Wokearr is busy with other jobs. Please try again in a moment."
 }

@@ -53,7 +53,8 @@ def test_score_changes_reported(bsc):
 
 
 def test_sitemap_retry_then_error(bsc):
-    good = MagicMock(status_code=200, text="<url><loc>https://isitwokeornot.com/movie/a</loc></url>", content=b"x")
+    body = b"<url><loc>https://isitwokeornot.com/movie/a</loc></url>"
+    good = MagicMock(status_code=200, encoding="utf-8", iter_content=lambda chunk_size: iter([body]))
     good.raise_for_status = lambda: None
     attempts = []
 

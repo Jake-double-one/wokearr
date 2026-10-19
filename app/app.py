@@ -689,7 +689,8 @@ def _root_error(exc: BaseException) -> BaseException:
 
 
 # Who a stage talks to - the fallback when an error doesn't carry a URL.
-_STAGE_DEFAULT_TARGET = {"score_sync": "isitwokeornot.com", "sync": "Plex", "push": "Plex", "cleanup": "Plex"}
+_STAGE_DEFAULT_TARGET = {"score_sync": "isitwokeornot.com", "sync": "Plex", "push": "Plex", "cleanup": "Plex",
+                         "refresh": "Plex"}
 
 
 def _error_target(err: BaseException, stage: str) -> str:
@@ -1165,6 +1166,67 @@ def push_pending_to_plex(log=None, progress=None, force: bool = False, rating_ke
     }
 
 
+def refresh_titles(log=None, progress=None, rating_keys=()) -> dict:
+    """All three stages for a handful of titles - the button on a tile. The
+    title's review page is fetched again (just that page, never the sitemap),
+    the original poster is cached if it isn't yet, and the badge is rendered
+    with the current score and pushed to Plex, forced, seasons included.
+    Returns stats for the run protocol."""
+    if demo_mode():
+        _emit(log, log_push, "push.demo_mode")
+        return {"pushed": 0, "push_failed": 0}
+
+    cache = load_cache()
+    plex = get_plex()
+    library = _current_library_items(plex)
+    selection = {rk: library[rk] for rk in rating_keys if rk in library}
+    changes = []
+    refreshed = 0
+    for rk, (item, prefix) in selection.items():
+        tmdb_id = tmdb_id_from_item(item)
+        key = f"{prefix}:{tmdb_id}" if tmdb_id else None
+        entry = cache.get(key) if key else None
+        url = (entry or {}).get("url") or ""
+        if not entry or not bsc.is_review_url(url):
+            _emit(log, log_score, "refresh.no_review", level=logging.WARNING, title=_display_title(item))
+            continue
+        result, status = bsc.extract_one(url, entry.get("lastmod"))
+        if result is None or result["key"] != key:
+            _emit(log, log_score, "refresh.fetch_failed", level=logging.WARNING, title=_display_title(item),
+                  status=status if result is None else "tmdb_id_changed")
+            continue
+        if result["score"] != entry.get("score"):
+            changes.append({"key": key, "title": result.get("title") or entry.get("title"),
+                            "old": entry.get("score"), "new": result["score"]})
+        cache[key] = {k: v for k, v in result.items() if k != "key"}
+        refreshed += 1
+        log_score.info("Refreshed: %s (%s) %s%%", result.get("title") or "?", key, result["score"])
+    if refreshed:
+        _save_cache(cache)
+
+    # The push renders from the cached original - make sure there is one,
+    # for a show's seasons too (a title never synced has none yet)
+    missing = []
+    for rk, (item, prefix) in selection.items():
+        for target in [item] + (_seasons_for_show(item) if prefix == "tv" else []):
+            if (ORIGINALS_DIR / f"{target.ratingKey}.jpg").exists():
+                continue
+            try:
+                _, found = fetch_original_poster_bytes(plex, target)
+                if not found:
+                    missing.append(_display_title(target))
+            except Exception as e:
+                _emit(log, log_plex, "sync.poster_fetch_error", level=logging.WARNING,
+                      title=_display_title(target), error=_describe(e))
+    if missing:
+        _emit(log, log_plex, "sync.missing_originals_warning", level=logging.WARNING, titles=", ".join(missing))
+
+    stats = push_pending_to_plex(log=log, progress=progress, force=True, rating_keys=list(selection))
+    stats["scores_updated"] = refreshed
+    stats["score_changes"] = _report_score_changes(changes)
+    return stats
+
+
 def autonomous_sync(log=None, progress=None) -> dict:
     """Autopilot: all three stages in sequence (score sync, Plex comparison
     incl. rendering, push), recorded as one entry in the run protocol.
@@ -1525,7 +1587,8 @@ def api_poster(rating_key):
 
 
 # Which logger a failed manual job is reported under, by stage
-_STAGE_LOGGERS = {"score_sync": log_score, "sync": log_plex, "push": log_push, "cleanup": log_cleanup}
+_STAGE_LOGGERS = {"score_sync": log_score, "sync": log_plex, "push": log_push, "cleanup": log_cleanup,
+                  "refresh": log_push}
 
 
 def _start_job(trigger: str, stage: str, work, total: int = 0, initial_log=None) -> str | None:
@@ -1651,6 +1714,26 @@ def api_apply():
         )
 
     return _job_response(_start_job("push", "push", work, total=len(rating_keys)))
+
+
+@app.route("/api/refresh", methods=["POST"])
+def api_refresh():
+    """The button on a tile: score fetched again, badge rendered and pushed -
+    for the given titles only (see refresh_titles)."""
+    if demo_mode():
+        return jsonify({"error": t("api.apply.demo_error")}), 400
+
+    payload = request.get_json(force=True)
+    rating_keys = [str(rk) for rk in (payload.get("ratingKeys", []) if isinstance(payload, dict) else [])]
+
+    def work(job, job_log):
+        return refresh_titles(
+            log=job_log,
+            progress=lambda done, total: job.update(progress=[done, total]),
+            rating_keys=rating_keys,
+        )
+
+    return _job_response(_start_job("refresh", "refresh", work, total=len(rating_keys)))
 
 
 @app.route("/api/cleanup-posters", methods=["POST"])

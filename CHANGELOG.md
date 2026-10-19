@@ -39,6 +39,14 @@ configured.
 - `/healthz` only says whether Wokearr is up; version and settings stay
   behind the login in `/api/status`.
 
+### Changed
+- **The button on a tile is now "Refresh"** instead of "Push": it fetches
+  the title's review page from isitwokeornot.com again (only that page, not
+  the sitemap), renders the badge with the current score and pushes it to
+  Plex, seasons included - the whole programme for just this title. Shows up
+  in the run protocol as "Title refresh". The "all" button in the top bar
+  still only pushes.
+
 ### Added
 - `TRUSTED_PROXIES`: behind a reverse proxy, the login rate limit and the
   log can now see the real client. List the proxy's address or network, and

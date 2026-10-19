@@ -134,7 +134,7 @@ function render() {
         <div class="card-title">${escapeHtml(item.title)}</div>
         <div class="card-year">${escapeHtml(item.year || "")}</div>
         <div class="card-actions">
-          <button class="card-apply" data-key="${escapeHtml(item.ratingKey)}">${escapeHtml(t("card.push"))}</button>
+          <button class="card-apply" data-key="${escapeHtml(item.ratingKey)}" title="${escapeHtml(t("card.refresh_title"))}">${escapeHtml(t("card.refresh"))}</button>
           <a class="source-link" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(t("card.source_title"))}">
             <img class="source-icon" src="https://isitwokeornot.com/favicon.ico" alt="isitwokeornot.com">
           </a>
@@ -150,7 +150,7 @@ function render() {
   }
 
   grid.querySelectorAll(".card-apply").forEach(btn => {
-    btn.addEventListener("click", () => applyBadges([btn.dataset.key], btn));
+    btn.addEventListener("click", () => refreshTitle(btn.dataset.key, btn));
   });
 
   document.getElementById("count-all").textContent = ITEMS.length;
@@ -369,8 +369,8 @@ async function loadLibrary() {
   render();
 }
 
-async function applyBadges(ratingKeys, btn) {
-  if (btn) { btn.disabled = true; btn.textContent = t("card.loading"); }
+// The "all" button: stage 3 for the whole library, forced
+async function applyBadges(ratingKeys) {
   const res = await apiFetch("/api/apply", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -380,11 +380,34 @@ async function applyBadges(ratingKeys, btn) {
   if (data.error) {
     showToast(data.error);
     setTimeout(hideToast, 4000);
-    if (btn) { btn.disabled = false; btn.textContent = t("card.push"); }
     return;
   }
-  const job = await pollJob(data.job_id, t("toast.uploading_posters"));
-  if (btn) { btn.textContent = t("card.push_done"); }
+  await pollJob(data.job_id, t("toast.uploading_posters"));
+}
+
+// The button on a tile: the whole programme for just this title - score
+// fetched again, badge rendered, pushed to Plex. The grid is reloaded
+// afterwards, so a changed score shows right away.
+async function refreshTitle(ratingKey, btn) {
+  btn.disabled = true;
+  btn.textContent = t("card.loading");
+  const res = await apiFetch("/api/refresh", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ratingKeys: [ratingKey] }),
+  });
+  const data = await res.json();
+  if (data.error) {
+    showToast(data.error);
+    setTimeout(hideToast, 4000);
+    btn.disabled = false;
+    btn.textContent = t("card.refresh");
+    return;
+  }
+  const job = await pollJob(data.job_id, t("toast.refreshing"));
+  btn.textContent = job.state === "done" ? t("card.refresh_done") : t("card.refresh");
+  btn.disabled = false;
+  if (job.state === "done") setTimeout(loadLibrary, 1500);
 }
 
 function warnAboutMissingOriginals(job) {

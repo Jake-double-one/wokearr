@@ -7,6 +7,7 @@ Configuration is done entirely via environment variables (see .env.example),
 so the image can be published to GitHub/Docker Hub without any code changes.
 """
 import datetime
+import hashlib
 import io
 import ipaddress
 import json
@@ -24,7 +25,7 @@ from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 import requests
 from croniter import croniter
-from flask import Flask, abort, g, jsonify, request, send_file, render_template
+from flask import Flask, abort, g, jsonify, request, send_file, render_template, url_for
 from PIL import Image
 
 from badge import (  # noqa: E402
@@ -271,6 +272,26 @@ def _csp_nonce():
 
 
 app.jinja_env.globals["csp_nonce"] = lambda: getattr(g, "csp_nonce", "")
+
+# Static files carry a content hash in their URL. Without it, a browser kept
+# the previous app.js and style.css for hours after an update (heuristic
+# caching) and ran them against the new page - tiles showing a raw
+# translation key, a menu with no styling. Computed once per file.
+_STATIC_VERSIONS: dict[str, str] = {}
+
+
+def static_url(filename: str) -> str:
+    version = _STATIC_VERSIONS.get(filename)
+    if version is None:
+        try:
+            version = hashlib.sha256((Path(app.static_folder) / filename).read_bytes()).hexdigest()[:10]
+        except OSError:
+            version = APP_VERSION
+        _STATIC_VERSIONS[filename] = version
+    return url_for("static", filename=filename, v=version)
+
+
+app.jinja_env.globals["static_url"] = static_url
 
 
 @app.after_request

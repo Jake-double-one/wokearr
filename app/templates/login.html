@@ -10,19 +10,19 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Wokearr">
-<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+<link rel="manifest" href="{{ static_url('manifest.json') }}">
 <meta name="robots" content="noindex">
 <title>{{ t('login.title') }} · Wokearr</title>
-<link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" sizes="32x32">
-<link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
-<link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="icon" href="{{ static_url('favicon.ico') }}" sizes="32x32">
+<link rel="icon" href="{{ static_url('favicon.svg') }}" type="image/svg+xml">
+<link rel="apple-touch-icon" href="{{ static_url('apple-touch-icon.png') }}">
+<link rel="stylesheet" href="{{ static_url('style.css') }}">
 </head>
 <body class="login-page">
 
 <main class="login-panel">
   <div class="login-brand">
-    <img class="brand-logo" src="{{ url_for('static', filename='favicon.svg') }}" alt="" width="34" height="34">
+    <img class="brand-logo" src="{{ static_url('favicon.svg') }}" alt="" width="34" height="34">
     <span class="brand-name">Wokearr</span>
   </div>
 

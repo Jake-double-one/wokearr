@@ -50,6 +50,7 @@ body {
 .more-menu { position: relative; }
 .more-menu > summary { list-style: none; display: inline-block; user-select: none; }
 .more-menu > summary::-webkit-details-marker { display: none; }
+.more-menu > summary::marker { content: ""; }
 .more-menu[open] > summary { background: var(--panel-hover); }
 .more-menu-list {
   position: absolute; right: 0; top: calc(100% + 6px); z-index: 20;

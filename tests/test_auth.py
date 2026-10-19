@@ -72,6 +72,45 @@ def test_forms_login_needs_the_forms_own_token(make_app):
     assert login(c, username="dennis", password="s3cret!").status_code == 302, "not locked out"
 
 
+def test_trusted_proxies_rate_limit_the_client_behind_the_proxy(make_app):
+    """Behind a reverse proxy, the lockout counts the client in X-Forwarded-For
+    - but only when the request really comes from a listed proxy."""
+    wa = make_app(AUTH_METHOD="basic", AUTH_USERNAME="dennis", AUTH_PASSWORD="right-one",
+                  TRUSTED_PROXIES="172.18.0.0/16, 10.0.0.5")
+    c = wa.app.test_client()
+    via_proxy = {"REMOTE_ADDR": "172.18.0.2"}
+    for _ in range(5):
+        c.get("/", headers={**basic("x", "guess"), "X-Forwarded-For": "203.0.113.5"}, environ_base=via_proxy)
+    locked = c.get("/", headers={**basic("dennis", "right-one"), "X-Forwarded-For": "203.0.113.5"}, environ_base=via_proxy)
+    assert locked.status_code == 429
+    other = c.get("/", headers={**basic("dennis", "right-one"), "X-Forwarded-For": "203.0.113.6"}, environ_base=via_proxy)
+    assert other.status_code == 200, "another client behind the same proxy is not locked out"
+    # A chain: the client's own (fake) entry on the left, the real one appended by the proxy
+    chain = c.get("/", headers={**basic("dennis", "right-one"), "X-Forwarded-For": "1.2.3.4, 203.0.113.5, 10.0.0.5"},
+                  environ_base=via_proxy)
+    assert chain.status_code == 429, "the rightmost non-proxy address is the client"
+    # Not from a trusted proxy: the header is ignored, the connecting address counts
+    direct = {"REMOTE_ADDR": "198.51.100.9"}
+    assert c.get("/", headers={**basic("dennis", "right-one"), "X-Forwarded-For": "203.0.113.5"},
+                 environ_base=direct).status_code == 200
+
+
+def test_without_trusted_proxies_x_forwarded_for_is_ignored(make_app):
+    c = make_app(AUTH_METHOD="basic", AUTH_USERNAME="dennis", AUTH_PASSWORD="right-one").app.test_client()
+    for i in range(5):
+        c.get("/", headers={**basic("x", "guess"), "X-Forwarded-For": f"203.0.113.{i}"},
+              environ_base={"REMOTE_ADDR": "172.18.0.2"})
+    r = c.get("/", headers={**basic("dennis", "right-one"), "X-Forwarded-For": "203.0.113.99"},
+              environ_base={"REMOTE_ADDR": "172.18.0.2"})
+    assert r.status_code == 429, "all of them count as the connecting address"
+
+
+def test_invalid_trusted_proxy_entries_are_skipped(make_app):
+    wa = make_app(TRUSTED_PROXIES="10.0.0.5, not-an-ip, 300.1.1.1")
+    assert [str(n) for n in wa.auth.trusted_proxies] == ["10.0.0.5/32"]
+    assert wa.auth._rejected_proxies == ["not-an-ip", "300.1.1.1"]
+
+
 @pytest.mark.parametrize("target", ["//evil.example/", "https://evil.example/", "/\\evil.example", "javascript:alert(1)", "/login"])
 def test_forms_no_open_redirect(make_app, target):
     c = make_app(AUTH_METHOD="forms", AUTH_USERNAME="dennis", AUTH_PASSWORD="s3cret!").app.test_client()

@@ -36,10 +36,18 @@ Also, whenever a login is active:
 The CSRF check applies with AUTH_METHOD=none as well: without it, any web page
 the user visits could fire a plain cross-site POST at Wokearr on the LAN and
 start a rebuild, a push or the poster cleanup.
+
+Behind a reverse proxy every request arrives from the proxy's address, so
+the rate limit would lock everyone out together and the log would only ever
+name the proxy. TRUSTED_PROXIES (addresses or networks, comma-separated)
+names the proxies whose X-Forwarded-For may be believed; the client is then
+the rightmost address in it that isn't a trusted proxy itself. Anyone else's
+X-Forwarded-For is ignored as before - it can be faked by whoever sends it.
 """
 import datetime
 import hashlib
 import hmac
+import ipaddress
 import math
 import os
 import secrets
@@ -107,6 +115,28 @@ def load_config(environ=os.environ) -> tuple[str, str, str, str | None]:
     return method, username, password, None
 
 
+def parse_trusted_proxies(raw: str) -> tuple[list, list[str]]:
+    """TRUSTED_PROXIES -> (networks, rejected entries). "10.0.0.5" and
+    "172.18.0.0/16" both work; an unparseable entry is skipped, not fatal."""
+    networks, rejected = [], []
+    for entry in (part.strip() for part in raw.split(",")):
+        if not entry:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(entry, strict=False))
+        except ValueError:
+            rejected.append(entry)
+    return networks, rejected
+
+
+def _in_networks(address: str, networks: list) -> bool:
+    try:
+        ip = ipaddress.ip_address(address.strip())
+    except ValueError:
+        return False
+    return any(ip in net for net in networks)
+
+
 def _digest(value: str) -> bytes:
     """Fixed-length digest, so compare_digest doesn't leak the length either."""
     return hashlib.sha256(value.encode("utf-8")).digest()
@@ -141,6 +171,7 @@ class Auth:
             environ.get("AUTH_USERNAME") or environ.get("AUTH_PASSWORD") or environ.get("AUTH_PASSWORD_FILE")
         )
         self.t = translate
+        self.trusted_proxies, self._rejected_proxies = parse_trusted_proxies(environ.get("TRUSTED_PROXIES", ""))
         self._failures: dict[str, list[float]] = {}
         self._lock = threading.Lock()
 
@@ -172,6 +203,12 @@ class Auth:
                             "Set AUTH_METHOD=basic or AUTH_METHOD=forms.")
         else:
             log.info("Authentication: %s (user %r)", self.method, self.username)
+        if self._rejected_proxies:
+            log.warning("TRUSTED_PROXIES: ignoring %s - use addresses like 172.18.0.5 or networks like 172.18.0.0/16.",
+                        ", ".join(repr(e) for e in self._rejected_proxies))
+        if self.trusted_proxies:
+            log.info("Trusted proxies: %s - client addresses are taken from their X-Forwarded-For.",
+                     ", ".join(str(net) for net in self.trusted_proxies))
 
     # -- secret for signing the session cookie --------------------------------
 
@@ -217,13 +254,21 @@ class Auth:
 
     # -- rate limiting --------------------------------------------------------
 
-    @staticmethod
-    def _client() -> tuple[str, str]:
+    def _client(self) -> tuple[str, str]:
         """(address to rate-limit on, readable description for the log). The
-        limit uses the connecting address, which can't be faked; a proxy's
-        X-Forwarded-For is only added to the log line."""
+        limit uses the connecting address, which can't be faked. Only when
+        that address is a trusted proxy (TRUSTED_PROXIES) does the client
+        come from its X-Forwarded-For; otherwise the header is just quoted
+        in the log line."""
         ip = request.remote_addr or "?"
         forwarded = request.headers.get("X-Forwarded-For", "").strip()
+        if self.trusted_proxies and _in_networks(ip, self.trusted_proxies):
+            # Rightmost address a trusted proxy didn't add itself = the
+            # client; anything further left could have been sent by the client
+            for hop in reversed([h.strip() for h in forwarded.split(",") if h.strip()]):
+                if not _in_networks(hop, self.trusted_proxies):
+                    return hop[:64], f"{hop[:64]} (via proxy {ip})"
+            return ip, ip
         return ip, f"{ip} (X-Forwarded-For: {forwarded[:100]})" if forwarded else ip
 
     def _seconds_locked(self, ip: str) -> int:

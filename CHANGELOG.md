@@ -39,6 +39,12 @@ configured.
 - `/healthz` only says whether Wokearr is up; version and settings stay
   behind the login in `/api/status`.
 
+### Added
+- `TRUSTED_PROXIES`: behind a reverse proxy, the login rate limit and the
+  log can now see the real client. List the proxy's address or network, and
+  Wokearr takes the client from that proxy's `X-Forwarded-For`; from anyone
+  else the header stays ignored. Optional - nothing changes without it.
+
 ### Fixed
 - When one of several libraries can't be read (renamed, wrong type), the
   cleanup of cached posters is skipped for that run instead of treating the

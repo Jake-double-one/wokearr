@@ -33,10 +33,11 @@ def test_login_fields_are_not_autofocused(make_app):
 def test_static_files_are_versioned_by_content(make_app):
     """A new image must never run a browser's cached app.js against new HTML."""
     import hashlib
-    pages = {"/": make_app(), "/login": make_app(AUTH_METHOD="forms", AUTH_USERNAME="dennis", AUTH_PASSWORD="s3cret!")}
-    for path, wa in pages.items():
+    # make_app reloads one module in place, so the two configurations are checked one after the other
+    for path, env in (("/", {}), ("/login", {"AUTH_METHOD": "forms", "AUTH_USERNAME": "dennis", "AUTH_PASSWORD": "s3cret!"})):
+        wa = make_app(**env)
         html = wa.app.test_client().get(path).get_data(as_text=True)
         for name in ("style.css", "favicon.svg") + (("app.js",) if path == "/" else ()):
             digest = hashlib.sha256((wa.Path(wa.app.static_folder) / name).read_bytes()).hexdigest()[:10]
             assert f'/static/{name}?v={digest}' in html, (path, name)
-    assert pages["/"].app.test_client().get("/static/app.js?v=anything").status_code == 200
+        assert wa.app.test_client().get(f"/static/{name}?v=anything").status_code == 200

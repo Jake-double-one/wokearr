@@ -171,12 +171,13 @@ A per-version list of changes is in [CHANGELOG.md](CHANGELOG.md).
 Set `AUTO_SYNC_CRON` to a cron schedule (e.g. `0 * * * *` for hourly, see
 [crontab.guru](https://crontab.guru/) to build one) and Wokearr runs entirely
 on its own, without you needing to touch the UI. Every run performs the same
-three stages in sequence, which can also be triggered individually via the
-buttons below:
+three stages in sequence - the same thing the **Update all** button does by
+hand, and each stage alone is in the **More** menu (see
+[Manual operation](#manual-operation)):
 
 1. **Update Score Database** - pulls new/missing titles from
    isitwokeornot.com (incremental).
-2. **Sync Now** (Plex comparison) - for every title in your Plex library with
+2. **Compare with Plex** - for every title in your Plex library with
    a known score: fetches the missing original poster from Plex
    (`originals/`) and renders the branded version from it (`branded/`), if
    not already done with the current score. Also cleans up local files for
@@ -348,24 +349,28 @@ a line per title (fetched, rendered, removed). View it with
 
 ## Manual operation
 
-Not needed for normal operation with the autopilot active, but meant for
-anyone who deliberately turns off the autopilot (`AUTO_SYNC_CRON` empty, the
-default) and wants to trigger each stage themselves:
+**Update all** in the top bar runs the autopilot's three stages right away -
+the usual choice when the autopilot is off (`AUTO_SYNC_CRON` empty, the
+default). Only new or changed titles are pushed, and it shows up in the run
+protocol as "Manual run". **Refresh** on a title's tile does the same for
+just that title: its review page is fetched again from isitwokeornot.com
+(only that page, not the sitemap), the badge is rendered with the current
+score and pushed to Plex, seasons included, forced.
+
+The **More** menu holds the special cases, each with a line saying what it
+does:
 
 - **Update Score Database** - stage 1 only, incremental.
-- **Sync Now** - stage 2 only (Plex comparison, maintain original and branded
-  posters, remove orphans). No push to Plex.
-- **Push to Plex** (the "all" button) - stage 3 only, forced: uploads the
-  rendered poster regardless of whether the score has changed since the last
-  push (useful, e.g., after changing a badge setting, to force everything to
-  re-upload). Renders on demand if not already synced.
-- **Refresh** (the button on a title's tile) - all three stages for just
-  this title: its review page is fetched again from isitwokeornot.com (only
-  that page, not the sitemap), the badge is rendered with the current score
-  and pushed to Plex, seasons included. Forced like "Push to Plex".
-- **Full Rebuild** - like "Update Score Database", but really re-queries
+- **Reload Score Database Completely** - like above, but really re-queries
   every title at isitwokeornot.com (e.g. to pick up scores that changed in
   the meantime). Takes correspondingly longer.
+- **Compare with Plex, upload nothing** - stage 2 only (Plex comparison,
+  maintain original and branded posters, remove orphans). Nothing reaches
+  Plex, so the result can be checked in the data folder first.
+- **Re-upload All Posters** - stage 3 only, forced: uploads the rendered
+  poster of every title regardless of whether the score has changed since
+  the last push (e.g. after changing a badge setting). Asks first - it
+  touches the whole library. Renders on demand if not already synced.
 - **Delete Old Posters in Plex** - see next section.
 
 All jobs keep running as a background process in the container, even if you
@@ -380,8 +385,8 @@ noticeably fills up the Plex server's disk space over time (especially after
 pushing the same title multiple times, e.g. while testing).
 
 - **Automatic:** with `CLEANUP_OLD_POSTERS=true` (default), the app removes
-  all uploaded versions of a title in Plex after every push ("Push to
-  Plex"), except the currently active one - detected via Plex's own key
+  all uploaded versions of a title in Plex after every push, except the
+  currently active one - detected via Plex's own key
   scheme for uploads, not by image content. This also catches uploads from
   before this feature existed. TMDb/agent posters are never touched (and
   can't technically be deleted via the Plex API either). Rule of thumb:

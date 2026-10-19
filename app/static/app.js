@@ -366,8 +366,40 @@ async function loadLibrary() {
   const data = await res.json();
   ITEMS = data.items;
   document.getElementById("demo-flag").style.display = data.demo ? "inline-block" : "none";
+  // Without Plex there is nothing to compare, push or clean up
+  document.querySelectorAll("[data-needs-plex]").forEach(btn => { btn.disabled = data.demo; });
   render();
 }
+
+// The "More" menu closes once an entry was chosen, or on a click elsewhere
+const MORE_MENU = document.getElementById("more-menu");
+MORE_MENU.querySelectorAll(".menu-item").forEach(btn => {
+  btn.addEventListener("click", () => MORE_MENU.removeAttribute("open"));
+});
+document.addEventListener("click", (e) => {
+  if (!MORE_MENU.contains(e.target)) MORE_MENU.removeAttribute("open");
+});
+
+// "Update all": the autopilot's run, started by hand - the three stages,
+// only new or changed titles pushed
+document.getElementById("btn-run-all").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  try {
+    const res = await apiFetch("/api/run", { method: "POST" });
+    const data = await res.json();
+    if (data.error) {
+      showToast(data.error);
+      setTimeout(hideToast, 5000);
+      return;
+    }
+    const job = await pollJob(data.job_id, t("toast.running"));
+    warnAboutMissingOriginals(job);
+    loadLibrary();
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // The "all" button: stage 3 for the whole library, forced
 async function applyBadges(ratingKeys) {
@@ -458,7 +490,9 @@ document.getElementById("btn-rebuild-full").addEventListener("click", () => {
 });
 
 document.getElementById("btn-apply-all").addEventListener("click", () => {
-  applyBadges(ITEMS.map(i => i.ratingKey));
+  if (confirm(t("confirm.push_all"))) {
+    applyBadges(ITEMS.map(i => i.ratingKey));
+  }
 });
 
 document.getElementById("btn-cleanup-posters").addEventListener("click", async () => {

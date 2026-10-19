@@ -690,7 +690,7 @@ def _root_error(exc: BaseException) -> BaseException:
 
 # Who a stage talks to - the fallback when an error doesn't carry a URL.
 _STAGE_DEFAULT_TARGET = {"score_sync": "isitwokeornot.com", "sync": "Plex", "push": "Plex", "cleanup": "Plex",
-                         "refresh": "Plex"}
+                         "refresh": "Plex", "manual": "Plex"}
 
 
 def _error_target(err: BaseException, stage: str) -> str:
@@ -1227,11 +1227,11 @@ def refresh_titles(log=None, progress=None, rating_keys=()) -> dict:
     return stats
 
 
-def autonomous_sync(log=None, progress=None) -> dict:
-    """Autopilot: all three stages in sequence (score sync, Plex comparison
-    incl. rendering, push), recorded as one entry in the run protocol.
-    Usable individually for manual intervention: see score_sync/
-    sync_library/push_pending_to_plex.
+def _run_all_stages(log=None, progress=None) -> tuple[dict, list]:
+    """All three stages in sequence: score sync, Plex comparison incl.
+    rendering, push - only new or changed titles. The autopilot and the
+    "Update all" button share this. Returns (stats, errors) for the run
+    protocol, one error record per failed stage.
 
     The stages fail independently: if isitwokeornot.com is unreachable, the
     run carries on with the scores already in the local database, so new
@@ -1241,12 +1241,6 @@ def autonomous_sync(log=None, progress=None) -> dict:
         if progress:
             progress(step, 3)
 
-    with _job_lock:
-        return _autonomous_sync(log, _progress)
-
-
-def _autonomous_sync(log, _progress) -> dict:
-    started = _run_started("autopilot")
     stats, errors = {}, []
 
     def run_stage(stage, fn) -> bool:
@@ -1259,24 +1253,34 @@ def _autonomous_sync(log, _progress) -> dict:
             log_autopilot.exception("%s", _error_summary(record, t_log))
             return False
 
-    try:
-        if not run_stage("score_sync", lambda: score_sync(log=log)):
-            log_autopilot.warning("Continuing with the scores already in the local database.")
-        _progress(1)
-        if run_stage("sync", lambda: sync_library(log=log)):
-            _progress(2)
-            run_stage("push", lambda: push_pending_to_plex(log=log))
-        else:
-            log_autopilot.warning("Skipping the push to Plex - the Plex comparison didn't complete.")
-        _progress(3)
-    finally:
-        push_error = stats.pop("push_error", None)
-        if push_error:
-            errors.append(push_error)
-        _record_run("autopilot", started, stats, errors)
-        _invalidate_library_cache()
-        _notify_run(stats, errors)
-    return stats
+    if not run_stage("score_sync", lambda: score_sync(log=log)):
+        log_autopilot.warning("Continuing with the scores already in the local database.")
+    _progress(1)
+    if run_stage("sync", lambda: sync_library(log=log)):
+        _progress(2)
+        run_stage("push", lambda: push_pending_to_plex(log=log))
+    else:
+        log_autopilot.warning("Skipping the push to Plex - the Plex comparison didn't complete.")
+    _progress(3)
+    push_error = stats.pop("push_error", None)
+    if push_error:
+        errors.append(push_error)
+    return stats, errors
+
+
+def autonomous_sync(log=None, progress=None) -> dict:
+    """Autopilot: the three stages (see _run_all_stages), recorded as one
+    entry in the run protocol and reported by notification."""
+    with _job_lock:
+        started = _run_started("autopilot")
+        stats, errors = {}, []
+        try:
+            stats, errors = _run_all_stages(log, progress)
+        finally:
+            _record_run("autopilot", started, stats, errors)
+            _invalidate_library_cache()
+            _notify_run(stats, errors)
+        return stats
 
 
 def _reserve_rebuild_slot() -> float:
@@ -1624,14 +1628,19 @@ def _start_job(trigger: str, stage: str, work, total: int = 0, initial_log=None)
                 _jobs_waiting -= 1
             started = _run_started(trigger)
             stats, errors = {}, []
+            state = "error"
             try:
                 stats = work(job, job_log) or {}
-                job["state"] = "done"
+                # A multi-stage job reports its failed stages here (see api_run)
+                errors.extend(stats.pop("stage_errors", []))
+                if errors:
+                    job["error"] = _error_summary(errors[0])
+                else:
+                    state = "done"
             except Exception as e:
                 record = _error_record(stage, e)
                 errors.append(record)
                 _STAGE_LOGGERS.get(stage, log_run).exception("%s", _error_summary(record, t_log))
-                job["state"] = "error"
                 job["error"] = _error_summary(record)
                 job_log(job["error"])
             finally:
@@ -1640,6 +1649,8 @@ def _start_job(trigger: str, stage: str, work, total: int = 0, initial_log=None)
                     errors.append(push_error)
                 _record_run(trigger, started, stats, errors)
                 _invalidate_library_cache()
+                # Last: the browser reloads the protocol the moment it sees this
+                job["state"] = state
 
     threading.Thread(target=run, daemon=True).start()
     return job_id
@@ -1649,6 +1660,24 @@ def _job_response(job_id: str | None):
     if job_id is None:
         return jsonify({"error": t("api.busy")}), 429
     return jsonify({"job_id": job_id})
+
+
+@app.route("/api/run", methods=["POST"])
+def api_run():
+    """The "Update all" button: the autopilot's run, started by hand - the
+    three stages in sequence, only new or changed titles pushed. Doesn't
+    notify: whoever clicked is looking at the UI."""
+    if demo_mode():
+        return jsonify({"error": t("api.run.demo_error")}), 400
+
+    def work(job, job_log):
+        stats, errors = _run_all_stages(log=job_log,
+                                        progress=lambda done, total: job.update(progress=[done, total]))
+        job["missing_originals"] = stats.get("missing_originals", [])
+        stats["stage_errors"] = errors
+        return stats
+
+    return _job_response(_start_job("manual", "manual", work, total=3))
 
 
 @app.route("/api/rebuild-cache", methods=["POST"])

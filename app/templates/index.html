@@ -35,15 +35,25 @@
   </div>
   <div class="topbar-actions">
     <span id="demo-flag" class="demo-flag" style="display:none">{{ t('topbar.demo_flag') }}</span>
-    <div class="action-group">
-      <button id="btn-rebuild" class="btn btn-ghost" title="{{ t('topbar.btn_rebuild.title') }}">{{ t('topbar.btn_rebuild.label') }}</button>
-      <button id="btn-sync-library" class="btn btn-primary" title="{{ t('topbar.btn_sync_library.title') }}">{{ t('topbar.btn_sync_library.label') }}</button>
-      <button id="btn-apply-all" class="btn btn-primary" title="{{ t('topbar.btn_apply_all.title') }}">{{ t('topbar.btn_apply_all.label') }}</button>
-    </div>
-    <div class="action-group action-group-secondary">
-      <button id="btn-rebuild-full" class="btn btn-ghost btn-small" title="{{ t('topbar.btn_rebuild_full.title') }}">{{ t('topbar.btn_rebuild_full.label') }}</button>
-      <button id="btn-cleanup-posters" class="btn btn-ghost btn-small" title="{{ t('topbar.btn_cleanup_posters.title') }}">{{ t('topbar.btn_cleanup_posters.label') }}</button>
-    </div>
+    {#- The one everyday action: the autopilot's run, started by hand #}
+    <button id="btn-run-all" class="btn btn-primary" data-needs-plex title="{{ t('topbar.btn_run_all.title') }}">{{ t('topbar.btn_run_all.label') }}</button>
+    {#- The special cases - the single stages and the destructive jobs - behind a menu #}
+    <details id="more-menu" class="more-menu">
+      <summary class="btn btn-ghost">{{ t('topbar.more') }} ▾</summary>
+      <div class="more-menu-list" role="menu">
+        {%- for id, key, needs_plex in (
+            ("btn-rebuild", "btn_rebuild", False),
+            ("btn-rebuild-full", "btn_rebuild_full", False),
+            ("btn-sync-library", "btn_sync_library", True),
+            ("btn-apply-all", "btn_apply_all", True),
+            ("btn-cleanup-posters", "btn_cleanup_posters", True)) %}
+        <button id="{{ id }}" class="menu-item" role="menuitem"{% if needs_plex %} data-needs-plex{% endif %}>
+          <span class="menu-item-label">{{ t('topbar.' ~ key ~ '.label') }}</span>
+          <span class="menu-item-hint">{{ t('topbar.' ~ key ~ '.title') }}</span>
+        </button>
+        {%- endfor %}
+      </div>
+    </details>
   </div>
 </header>
 

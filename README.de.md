@@ -175,12 +175,13 @@ Eine Auflistung der Änderungen je Version steht in
 `AUTO_SYNC_CRON` auf einen Cron-Zeitplan setzen (z. B. `0 * * * *` für
 stündlich, Erstellung z. B. mit [crontab.guru](https://crontab.guru/)) und
 Wokearr läuft komplett von selbst, ohne dass ihr die UI anfassen müsst. Jeder
-Durchlauf macht der Reihe nach dieselben drei Stufen, die unten auch einzeln
-per Button auslösbar sind:
+Durchlauf macht der Reihe nach dieselben drei Stufen – dasselbe, was der
+Button **Alle aktualisieren** von Hand auslöst; jede Stufe einzeln steht im
+Menü **Mehr** (siehe [Manuelle Bedienung](#manuelle-bedienung)):
 
 1. **Score-Datenbank aktualisieren** – neue/fehlende Titel bei
    isitwokeornot.com nachziehen (inkrementell).
-2. **Jetzt synchronisieren** (Plex-Abgleich) – für jeden Titel eurer
+2. **Plex abgleichen** – für jeden Titel eurer
    Plex-Bibliothek mit bekanntem Score: fehlendes Original-Poster von Plex
    holen (`originals/`) und daraus die gebrandete Version rendern
    (`branded/`), falls noch nicht mit dem aktuellen Score geschehen. Räumt
@@ -366,26 +367,29 @@ beim Container unter **Logs**.
 
 ## Manuelle Bedienung
 
-Für den Normalbetrieb mit aktivem Autopiloten nicht nötig, aber gedacht für
-alle, die den Autopilot bewusst abschalten (`AUTO_SYNC_CRON` leer, Standard)
-und jede Stufe selbst antriggern wollen:
+**Alle aktualisieren** in der Kopfleiste startet die drei Stufen des
+Autopiloten sofort – die übliche Wahl, wenn der Autopilot aus ist
+(`AUTO_SYNC_CRON` leer, Standard). Hochgeladen werden nur neue oder geänderte
+Titel, im Lauf-Protokoll erscheint das als "Manueller Lauf". **Aktualisieren**
+auf der Kachel eines Titels macht dasselbe nur für diesen Titel: seine
+Review-Seite wird bei isitwokeornot.com neu abgerufen (nur diese Seite, nicht
+die Sitemap), das Badge mit dem aktuellen Score gerendert und auf Plex
+übertragen, Staffeln eingeschlossen, erzwungen.
+
+Das Menü **Mehr** enthält die Spezialfälle, jeder mit einer Zeile Erklärung:
 
 - **Score-Datenbank aktualisieren** – nur Stufe 1, inkrementell.
-- **Jetzt synchronisieren** – nur Stufe 2 (Plex-Abgleich, Original- und
-  gebrandete Poster pflegen, Leichen entfernen). Kein Push zu Plex.
-- **Auf Plex übertragen** (Alle-Button) – nur Stufe 3, erzwungen: lädt das
-  gerenderte Poster unabhängig davon hoch, ob sich der Score seit dem
-  letzten Push geändert hat (z. B. praktisch nach einer geänderten
-  Badge-Einstellung, um alles neu zu erzwingen). Rendert bei Bedarf
-  automatisch nach, falls noch nicht synchronisiert wurde.
-- **Aktualisieren** (Button auf der Kachel eines Titels) – alle drei Stufen
-  nur für diesen Titel: seine Review-Seite wird bei isitwokeornot.com neu
-  abgerufen (nur diese Seite, nicht die Sitemap), das Badge mit dem aktuellen
-  Score gerendert und auf Plex übertragen, Staffeln eingeschlossen. Erzwungen
-  wie "Auf Plex übertragen".
-- **Kompletter Neuaufbau** – wie "Score-Datenbank aktualisieren", fragt aber
-  wirklich alle Titel bei isitwokeornot.com erneut ab (z. B. um
-  zwischenzeitlich geänderte Scores nachzuziehen). Dauert entsprechend länger.
+- **Score-Datenbank komplett neu laden** – wie oben, fragt aber wirklich
+  alle Titel bei isitwokeornot.com erneut ab (z. B. um zwischenzeitlich
+  geänderte Scores nachzuziehen). Dauert entsprechend länger.
+- **Plex abgleichen, nichts hochladen** – nur Stufe 2 (Plex-Abgleich,
+  Original- und gebrandete Poster pflegen, Leichen entfernen). Nichts
+  erreicht Plex, das Ergebnis lässt sich vorher im Datenordner prüfen.
+- **Alle Poster neu hochladen** – nur Stufe 3, erzwungen: lädt das
+  gerenderte Poster jedes Titels hoch, egal ob sich der Score seit dem
+  letzten Push geändert hat (z. B. nach einer geänderten Badge-Einstellung).
+  Fragt vorher nach, denn es fasst die ganze Bibliothek an. Rendert bei
+  Bedarf automatisch nach.
 - **Alte Poster in Plex löschen** – siehe nächster Abschnitt.
 
 Alle Jobs laufen als Hintergrund-Prozess im Container weiter, auch wenn ihr
@@ -400,7 +404,7 @@ beschränkt, füllt den Plattenplatz des Plex-Servers aber mit der Zeit spürbar
 (besonders nach mehrfachem Übertragen desselben Titels, z. B. beim Testen).
 
 - **Automatisch:** Mit `CLEANUP_OLD_POSTERS=true` (Standard) räumt die App
-  nach jedem Push ("Auf Plex übertragen") alle hochgeladenen Versionen des
+  nach jedem Push alle hochgeladenen Versionen des
   jeweiligen Titels in Plex weg, außer der gerade aktiven - erkannt an Plex'
   eigenem Key-Schema für
   Uploads, nicht am Bildinhalt. Erfasst deshalb auch Uploads von vor diesem

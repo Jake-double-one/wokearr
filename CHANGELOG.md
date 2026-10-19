@@ -40,6 +40,15 @@ configured.
   behind the login in `/api/status`.
 
 ### Changed
+- **A simpler top bar.** One button, **Update all**, runs the autopilot's
+  three stages by hand (only new or changed titles are pushed; "Manual run"
+  in the protocol) - until now that took three clicks in the right order.
+  The single stages and the destructive jobs moved into a **More** menu,
+  each with a line saying what it does, and got clearer names: "Compare with
+  Plex, upload nothing" instead of "Sync Now", "Re-upload All Posters"
+  (asks first) instead of "Push to Plex", "Reload Score Database
+  Completely" instead of "Full Rebuild". Without Plex (demo mode) the
+  buttons that need it are greyed out instead of answering with an error.
 - **The button on a tile is now "Refresh"** instead of "Push": it fetches
   the title's review page from isitwokeornot.com again (only that page, not
   the sitemap), renders the badge with the current score and pushes it to

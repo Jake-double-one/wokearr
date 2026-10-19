@@ -49,6 +49,13 @@ configured.
 - When one of several libraries can't be read (renamed, wrong type), the
   cleanup of cached posters is skipped for that run instead of treating the
   library's titles as removed.
+- **Installed as a web app** (home screen on iPhone/Android): the status
+  bar is dark like the rest of the page instead of white, the splash screen
+  and app icon match, and the page keeps clear of the notch. A web app
+  manifest (`/static/manifest.json`) with 192/512 px icons was added.
+- The login fields are no longer focused automatically when the page
+  opens: iOS only offers saved passwords (1Password, iCloud Keychain) on a
+  tap, so the automatic focus kept the offer from appearing.
 
 ## [v0.5.0] – 2026-10-18
 

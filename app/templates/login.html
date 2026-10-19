@@ -2,7 +2,15 @@
 <html lang="{{ language[:2] }}">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<!-- Installed as a web app (home screen): dark status bar and splash screen
+     instead of the white default, see manifest.json -->
+<meta name="theme-color" content="#1c1e22">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Wokearr">
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 <meta name="robots" content="noindex">
 <title>{{ t('login.title') }} · Wokearr</title>
 <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" sizes="32x32">
@@ -24,13 +32,11 @@
 
     <label class="login-label" for="login-username">{{ t('login.username') }}</label>
     <input class="login-input" id="login-username" name="username" type="text" value="{{ username }}"
-           autocomplete="username" autocapitalize="none" spellcheck="false" required
-           {%- if not username %} autofocus{% endif %}>
+           autocomplete="username" autocapitalize="none" spellcheck="false" required>
 
     <label class="login-label" for="login-password">{{ t('login.password') }}</label>
     <input class="login-input" id="login-password" name="password" type="password"
-           autocomplete="current-password" required
-           {%- if username %} autofocus{% endif %}>
+           autocomplete="current-password" required>
 
     <label class="login-remember">
       <input type="checkbox" name="remember" value="1"> {{ t('login.remember') }}

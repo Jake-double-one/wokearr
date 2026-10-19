@@ -14,6 +14,10 @@
 
 * { box-sizing: border-box; }
 
+/* The page colour must also cover what lies outside <body> - the overscroll
+   area and, as an installed web app, the space behind the status bar */
+html { background: var(--bg); }
+
 body {
   margin: 0;
   background: var(--bg);
@@ -29,6 +33,8 @@ body {
   flex-wrap: wrap;
   gap: 10px;
   padding: 12px 20px;
+  /* As an installed web app the page runs under the status bar/notch */
+  padding-top: calc(12px + env(safe-area-inset-top, 0px));
   background: var(--panel);
   border-bottom: 1px solid var(--border);
 }
@@ -221,7 +227,7 @@ main { padding: 20px; }
 .empty-state { color: var(--muted); text-align: center; padding: 60px 0; }
 
 .app-footer {
-  padding: 16px 20px 28px;
+  padding: 16px 20px calc(28px + env(safe-area-inset-bottom, 0px));
   text-align: center;
   color: var(--muted);
   font-size: 12px;
@@ -297,6 +303,8 @@ main { padding: 20px; }
   align-items: center;
   justify-content: center;
   padding: 16px;
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
 }
 .login-panel {
   width: 100%;
@@ -338,7 +346,7 @@ main { padding: 20px; }
 
 .toast {
   position: fixed;
-  bottom: 20px; left: 50%;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px)); left: 50%;
   transform: translateX(-50%);
   background: var(--panel);
   border: 1px solid var(--border);
@@ -354,7 +362,7 @@ main { padding: 20px; }
 /* Mobile: Topbar stapeln, Grid enger, Karten-Overlay immer sichtbar (kein Hover auf Touch) */
 @media (max-width: 680px) {
   .system-notice { margin: 10px 14px 0; }
-  .topbar { flex-direction: column; align-items: stretch; padding: 10px 14px; }
+  .topbar { flex-direction: column; align-items: stretch; padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top, 0px)); }
   .topbar-actions { width: 100%; }
   .action-group { width: 100%; }
   .action-group .btn { flex: 1 1 auto; text-align: center; }

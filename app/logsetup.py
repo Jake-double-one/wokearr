@@ -49,6 +49,14 @@ _configured = False
 class _Formatter(logging.Formatter):
     """Shows 'score-sync' instead of the full logger name 'wokearr.score-sync'."""
 
+    def formatMessage(self, record):
+        # Titles from Plex or isitwokeornot.com end up in messages. A line
+        # break in one would otherwise forge a second, fake log line - and
+        # fail2ban reads this log. Tracebacks are appended separately by
+        # format() and keep their line breaks.
+        record.message = record.message.replace("\r", "\\r").replace("\n", "\\n")
+        return super().formatMessage(record)
+
     def format(self, record):
         name = record.name
         record.area = name[len(ROOT) + 1:] if name.startswith(ROOT + ".") else name

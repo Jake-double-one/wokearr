@@ -118,5 +118,7 @@
   "notice.run_as.chown_failed": "Wokearr läuft weiterhin als root: Der Datenordner {data_dir} konnte nicht an Benutzer {user} übergeben werden (schreibgeschützt oder Netzlaufwerk?). Alles funktioniert. Zum Umstellen den Ordner auf dem Host {user} geben oder PUID/PGID auf seinen Besitzer setzen – oder PUID=0 setzen, um bei root zu bleiben und diesen Hinweis auszublenden.",
   "notice.run_as.not_writable": "Wokearr läuft weiterhin als root: Benutzer {user} kann nicht in den Datenordner {data_dir} schreiben. Alles funktioniert. Zum Umstellen PUID/PGID auf den Besitzer des Ordners auf dem Host setzen – oder PUID=0 setzen, um bei root zu bleiben und diesen Hinweis auszublenden.",
   "notice.run_as.invalid_ids": "Wokearr läuft als root, weil PUID/PGID keine Zahlen sind ({user}). Alles funktioniert. Bitte korrigieren – oder PUID=0 setzen, um bei root zu bleiben und diesen Hinweis auszublenden.",
-  "notice.more": "Details"
+  "notice.more": "Details",
+  "login.error_expired": "Die Anmeldeseite war zu lange geöffnet. Bitte noch einmal versuchen.",
+  "api.busy": "Wokearr ist gerade mit anderen Aufgaben beschäftigt. Bitte gleich noch einmal versuchen."
 }

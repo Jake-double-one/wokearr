@@ -51,6 +51,15 @@ expect_uid() {
     [ "$uid" = "$1" ] || fail "$2: app runs as uid $uid, expected $1"
 }
 
+# The app process may never regain privileges: no-new-privs set, and - where
+# the kernel allowed it - an empty capability bounding set
+expect_locked_down() {
+    status="$(docker exec "$NAME" cat /proc/1/status)"
+    echo "$status" | grep -q "^NoNewPrivs:[[:space:]]*1" || fail "$1: NoNewPrivs is not set on the app process"
+    echo "$status" | grep -q "^CapBnd:[[:space:]]*0*$" || fail "$1: capability bounding set is not empty"
+    echo "$status" | grep -q "^CapEff:[[:space:]]*0*$" || fail "$1: app process still has capabilities"
+}
+
 expect_log() {
     docker logs "$NAME" 2>&1 | grep -q -- "$1" || fail "$2: log lacks '$1'"
 }
@@ -69,12 +78,20 @@ $SUDO mkdir -p "$DATA/originals" "$DATA/branded"
 echo '{}' | $SUDO tee "$DATA/score_cache.json" >/dev/null
 echo 'secret' | $SUDO tee "$DATA/session_secret" >/dev/null
 $SUDO chmod 600 "$DATA/session_secret"
+# Not Wokearr's: must keep its owner (a folder mounted by mistake must not be rewritten)
+$SUDO mkdir -p "$DATA/not-ours"
+echo 'keep' | $SUDO tee "$DATA/not-ours/file" >/dev/null
 $SUDO chown -R 0:0 "$DATA"
 if start -v "$DATA:/data"; then
     expect_uid 1000 "update"
+    expect_locked_down "update"
     expect_log "CHANGE: Wokearr no longer runs as root" "update"
-    owner="$($SUDO stat -c %u:%g "$DATA/session_secret")"
-    [ "$owner" = "1000:1000" ] || fail "update: session_secret belongs to $owner"
+    for f in session_secret score_cache.json originals; do
+        owner="$($SUDO stat -c %u:%g "$DATA/$f")"
+        [ "$owner" = "1000:1000" ] || fail "update: $f belongs to $owner"
+    done
+    owner="$($SUDO stat -c %u:%g "$DATA/not-ours/file")"
+    [ "$owner" = "0:0" ] || fail "update: a file that isn't Wokearr's was handed over ($owner)"
     page | grep -q "system-notice" && fail "update: web UI shows a notice although nothing is to do"
 fi
 
@@ -96,6 +113,7 @@ docker volume rm -f wokearr-container-test >/dev/null 2>&1 || true
 echo "== PUID=0"
 if start -e PUID=0 -v "$DATA:/data"; then
     expect_uid 0 "PUID=0"
+    docker exec "$NAME" grep -q "^NoNewPrivs:[[:space:]]*1" /proc/1/status || fail "PUID=0: NoNewPrivs not set"
 fi
 
 echo "== user: 1000:1000"

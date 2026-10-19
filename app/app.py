@@ -8,11 +8,13 @@ so the image can be published to GitHub/Docker Hub without any code changes.
 """
 import datetime
 import io
+import ipaddress
 import json
 import logging
 import re
 import os
 import secrets
+import socket
 import threading
 import time
 import uuid
@@ -259,6 +261,8 @@ if RUN_AS_NOTICE not in RUN_AS_NOTICES:
 
 app = Flask(__name__)
 app.jinja_env.globals["t"] = t
+# The largest request body Wokearr ever expects is a list of rating keys
+app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024
 
 
 @app.before_request
@@ -300,6 +304,17 @@ _rebuild_lock = threading.Lock()
 _last_rebuild_started = 0.0  # epoch seconds - protects isitwokeornot.com from too-frequent fetches
 _previous_rebuild_started = 0.0  # restored by _release_rebuild_slot when a sitemap fetch fails
 _state_lock = threading.Lock()
+# One job at a time - manual buttons and the autopilot alike. Two runs at
+# once would render and upload the same titles twice and race on the state
+# files; a flood of clicks would turn into a flood of Plex uploads.
+_job_lock = threading.Lock()
+_jobs_waiting = 0
+_jobs_waiting_lock = threading.Lock()
+JOBS_MAX_WAITING = 3  # queued behind the running one; more get "busy"
+
+# Posters and pages are read fully into memory - a cap keeps one oversized
+# response from taking the container down. Posters are 100 KB - 2 MB.
+MAX_IMAGE_BYTES = 30 * 1024 * 1024
 
 PLEX_TYPE_TO_CACHE_PREFIX = {"movie": "movie", "show": "tv"}
 
@@ -374,13 +389,44 @@ def _is_own_badge(img_bytes: bytes | None) -> bool | None:
         return None
 
 
+def _plex_get(plex, key: str, timeout: int = 20) -> bytes:
+    """A file from the Plex server. The token travels as a header, never in
+    the URL - a URL ends up in Plex's own log, in proxy logs and in error
+    messages, a header in none of them."""
+    resp = requests.get(plex.url(key), headers={"X-Plex-Token": PLEX_TOKEN}, timeout=timeout, stream=True)
+    resp.raise_for_status()
+    return bsc.read_capped(resp, MAX_IMAGE_BYTES)
+
+
+def _is_public_url(url: str) -> bool:
+    """Only http(s) to a public address. Plex hands out absolute URLs for
+    agent posters (TMDb, fanart.tv ...); it must not be able to point
+    Wokearr at something inside the user's network instead."""
+    try:
+        parts = urlsplit(url)
+        if parts.scheme not in ("http", "https") or not parts.hostname or parts.username or parts.password:
+            return False
+        addresses = {info[4][0] for info in socket.getaddrinfo(parts.hostname, parts.port or 0, proto=socket.IPPROTO_TCP)}
+    except (ValueError, OSError):
+        return False
+    return bool(addresses) and all(ipaddress.ip_address(a).is_global for a in addresses)
+
+
 def _poster_candidate_bytes(plex, p) -> bytes | None:
     key = getattr(p, "key", "") or ""
     if not key:
         return None
-    url = key if key.startswith("http") else plex.url(key, includeToken=True)
     try:
-        return requests.get(url, timeout=20).content
+        if "://" in key:
+            # Absolute: an agent URL. Anything but a public http(s) address is
+            # not a poster Wokearr can or should fetch
+            if not _is_public_url(key):
+                log_plex.debug("Ignoring poster candidate on a non-public address: %s", key[:120])
+                return None
+            resp = requests.get(key, timeout=20, stream=True)
+            resp.raise_for_status()
+            return bsc.read_capped(resp, MAX_IMAGE_BYTES)
+        return _plex_get(plex, key)
     except requests.RequestException:
         return None
 
@@ -436,8 +482,7 @@ def fetch_original_poster_bytes(plex, item) -> tuple[bytes, bool]:
     except Exception:
         pass
 
-    poster_url = plex.url(item.thumb, includeToken=True)
-    return requests.get(poster_url, timeout=20).content, False
+    return _plex_get(plex, item.thumb), False
 
 
 def cleanup_old_uploaded_posters(plex, item) -> int:
@@ -744,7 +789,7 @@ def push_to_plex(plex, item, entry: dict, force: bool = False) -> None:
     _record_state(PUSHED_STATE_FILE, item.ratingKey, _state_value(entry["score"]))
 
 
-def _current_library_items(plex) -> dict:
+def _current_library_items(plex, skipped: list | None = None) -> dict:
     """Returns {ratingKey: (plex_item, cache_prefix)} for all configured
     libraries - the basis for the Plex comparison in the autopilot.
 
@@ -752,7 +797,9 @@ def _current_library_items(plex) -> dict:
     know - a typo in LIBRARY_SECTIONS otherwise just looks like an empty
     library. Connection problems are raised instead of skipped: silently
     treating an unreachable Plex as "no titles" would make the orphan cleanup
-    delete every cached poster."""
+    delete every cached poster. Libraries that were skipped are appended to
+    'skipped' when a list is passed, so callers can hold back anything
+    destructive (see sync_library)."""
     items = {}
     for section_name in LIBRARY_SECTIONS:
         try:
@@ -762,11 +809,15 @@ def _current_library_items(plex) -> dict:
         except Exception as e:
             log_plex.warning("Library %r not found in Plex (%s) - check LIBRARY_SECTIONS. Libraries in Plex: %s",
                              section_name, _describe(e), _plex_section_names(plex))
+            if skipped is not None:
+                skipped.append(section_name)
             continue
         prefix = PLEX_TYPE_TO_CACHE_PREFIX.get(section.type)
         if not prefix:
             log_plex.warning("Library %r is of type %r - only movie and show libraries are supported, skipping it.",
                              section_name, section.type)
+            if skipped is not None:
+                skipped.append(section_name)
             continue
         section_items = section.all()
         log_plex.debug("Library %r: %d titles", section_name, len(section_items))
@@ -903,7 +954,8 @@ def sync_library(log=None) -> dict:
 
     cache = load_cache()
     plex = get_plex()
-    library = _current_library_items(plex)
+    skipped_sections = []
+    library = _current_library_items(plex, skipped_sections)
     valid_keys = set(library.keys())
 
     # Shows only carry one score for the whole series, but each season has
@@ -980,9 +1032,13 @@ def sync_library(log=None) -> dict:
     # Remove orphans (titles no longer in Plex) - in both local folders. Not
     # when Plex returned no titles at all: that's far more likely a problem
     # (every library name wrong, an empty response) than a library that was
-    # really emptied, and would otherwise wipe every cached poster.
+    # really emptied, and would otherwise wipe every cached poster. Nor when
+    # a library was skipped: its titles would all look like orphans.
     removed = 0
-    if library:
+    if library and skipped_sections:
+        log_plex.warning("Skipping the orphan cleanup: library %s could not be read this run.",
+                         ", ".join(repr(name) for name in skipped_sections))
+    elif library:
         for folder in (ORIGINALS_DIR, BRANDED_DIR):
             for f in folder.glob("*.jpg"):
                 if f.stem not in valid_keys:
@@ -1123,6 +1179,11 @@ def autonomous_sync(log=None, progress=None) -> dict:
         if progress:
             progress(step, 3)
 
+    with _job_lock:
+        return _autonomous_sync(log, _progress)
+
+
+def _autonomous_sync(log, _progress) -> dict:
     started = _run_started("autopilot")
     stats, errors = {}, []
 
@@ -1151,6 +1212,7 @@ def autonomous_sync(log=None, progress=None) -> dict:
         if push_error:
             errors.append(push_error)
         _record_run("autopilot", started, stats, errors)
+        _invalidate_library_cache()
         _notify_run(stats, errors)
     return stats
 
@@ -1171,13 +1233,14 @@ def _reserve_rebuild_slot() -> float:
         return 0.0
 
 
-def _release_rebuild_slot() -> None:
+def _release_rebuild_slot(sitemap_failed: bool = True) -> None:
     """Undoes the last reservation - for a run that never got to request a
-    single review page (see score_sync)."""
+    single review page (see score_sync), or one that never started."""
     global _last_rebuild_started
     with _rebuild_lock:
         _last_rebuild_started = _previous_rebuild_started
-    log_score.info("Cooldown released - the sitemap fetch failed, so the next attempt may start right away.")
+    if sitemap_failed:
+        log_score.info("Cooldown released - the sitemap fetch failed, so the next attempt may start right away.")
 
 
 def _notify_run(stats: dict, errors: list) -> None:
@@ -1340,20 +1403,13 @@ def favicon():
 
 @app.route("/healthz")
 def healthz():
-    """Always reachable without login (Docker's health check). Reports a
-    misconfigured login as unhealthy, so it shows up in Portainer instead of
-    only as a locked page."""
-    body = {
-        "status": "ok",
-        "demo_mode": demo_mode(),
-        "version": APP_VERSION,
-        "build_date": BUILD_DATE or None,
-        "auth": auth.method if not auth.error else "misconfigured",
-    }
+    """Always reachable without login (Docker's health check), so it says no
+    more than it must: a misconfigured login is reported as unhealthy, so it
+    shows up in Portainer instead of only as a locked page. Version and
+    settings are in /api/status, behind the login."""
     if auth.error:
-        body["status"] = "error"
-        return jsonify(body), 503
-    return jsonify(body)
+        return jsonify({"status": "error", "auth": "misconfigured"}), 503
+    return jsonify({"status": "ok"})
 
 
 @app.route("/api/status")
@@ -1384,10 +1440,27 @@ def _release_date(item) -> str | None:
     return f"{year:04d}-01-01" if isinstance(year, int) else None
 
 
+# /api/library walks the whole Plex library on every call, synchronously in
+# the request thread. Kept for a short while, so a burst of requests can't
+# tie up every worker thread; any finished job drops it (see _start_job).
+LIBRARY_CACHE_SECONDS = 30
+_library_cache = {"at": 0.0, "items": None}
+_library_cache_lock = threading.Lock()
+
+
+def _invalidate_library_cache() -> None:
+    with _library_cache_lock:
+        _library_cache["items"] = None
+
+
 @app.route("/api/library")
 def api_library():
     if demo_mode():
         return jsonify({"demo": True, "items": DEMO_ITEMS})
+
+    with _library_cache_lock:
+        if _library_cache["items"] is not None and time.time() - _library_cache["at"] < LIBRARY_CACHE_SECONDS:
+            return jsonify({"demo": False, "items": _library_cache["items"]})
 
     cache = load_cache()
     plex = get_plex()
@@ -1410,6 +1483,8 @@ def api_library():
             "type": "movie" if prefix == "movie" else "show",
             "sourceUrl": _with_utm(entry.get("url")),
         })
+    with _library_cache_lock:
+        _library_cache.update(at=time.time(), items=items)
     return jsonify({"demo": False, "items": items})
 
 
@@ -1428,7 +1503,7 @@ def api_poster(rating_key):
     """
     demo = next((d for d in DEMO_ITEMS if d["ratingKey"] == rating_key), None)
     if demo:
-        img = requests.get(demo["poster"], timeout=15).content
+        img = bsc.read_capped(requests.get(demo["poster"], timeout=15, stream=True), MAX_IMAGE_BYTES)
         resp = send_file(io.BytesIO(img), mimetype="image/jpeg")
         resp.headers["Cache-Control"] = "no-store"
         return resp
@@ -1443,8 +1518,7 @@ def api_poster(rating_key):
         abort(404)
     plex = get_plex()
     item = plex.fetchItem(int(rating_key))
-    poster_url = plex.url(item.thumb, includeToken=True)
-    img = requests.get(poster_url, timeout=15).content
+    img = _plex_get(plex, item.thumb, timeout=15)
     resp = send_file(io.BytesIO(img), mimetype="image/jpeg")
     resp.headers["Cache-Control"] = "no-store"
     return resp
@@ -1454,11 +1528,20 @@ def api_poster(rating_key):
 _STAGE_LOGGERS = {"score_sync": log_score, "sync": log_plex, "push": log_push, "cleanup": log_cleanup}
 
 
-def _start_job(trigger: str, stage: str, work, total: int = 0, initial_log=None) -> str:
+def _start_job(trigger: str, stage: str, work, total: int = 0, initial_log=None) -> str | None:
     """Runs work(job, job_log) -> stats in a background thread, the same way
     for every button: records the run in the protocol, and turns an
     exception into an error record - logged with its traceback in the
-    container, summarized in the user's language in the browser."""
+    container, summarized in the user's language in the browser.
+
+    Jobs run one after another (_job_lock); a job started while another
+    runs waits its turn, which the UI shows as a progress bar at 0. Returns
+    None when too many are already waiting - the caller answers "busy"."""
+    global _jobs_waiting
+    with _jobs_waiting_lock:
+        if _jobs_waiting >= JOBS_MAX_WAITING:
+            return None
+        _jobs_waiting += 1
     job_id = str(uuid.uuid4())
     job = {"state": "running", "progress": [0, total], "log": list(initial_log or [])}
     # Finished jobs are only polled for a few seconds - keep the latest ones
@@ -1472,26 +1555,37 @@ def _start_job(trigger: str, stage: str, work, total: int = 0, initial_log=None)
         job["log"].append(msg)
 
     def run():
-        started = _run_started(trigger)
-        stats, errors = {}, []
-        try:
-            stats = work(job, job_log) or {}
-            job["state"] = "done"
-        except Exception as e:
-            record = _error_record(stage, e)
-            errors.append(record)
-            _STAGE_LOGGERS.get(stage, log_run).exception("%s", _error_summary(record, t_log))
-            job["state"] = "error"
-            job["error"] = _error_summary(record)
-            job_log(job["error"])
-        finally:
-            push_error = stats.pop("push_error", None)
-            if push_error:
-                errors.append(push_error)
-            _record_run(trigger, started, stats, errors)
+        global _jobs_waiting
+        with _job_lock:
+            with _jobs_waiting_lock:
+                _jobs_waiting -= 1
+            started = _run_started(trigger)
+            stats, errors = {}, []
+            try:
+                stats = work(job, job_log) or {}
+                job["state"] = "done"
+            except Exception as e:
+                record = _error_record(stage, e)
+                errors.append(record)
+                _STAGE_LOGGERS.get(stage, log_run).exception("%s", _error_summary(record, t_log))
+                job["state"] = "error"
+                job["error"] = _error_summary(record)
+                job_log(job["error"])
+            finally:
+                push_error = stats.pop("push_error", None)
+                if push_error:
+                    errors.append(push_error)
+                _record_run(trigger, started, stats, errors)
+                _invalidate_library_cache()
 
     threading.Thread(target=run, daemon=True).start()
     return job_id
+
+
+def _job_response(job_id: str | None):
+    if job_id is None:
+        return jsonify({"error": t("api.busy")}), 429
+    return jsonify({"job_id": job_id})
 
 
 @app.route("/api/rebuild-cache", methods=["POST"])
@@ -1515,7 +1609,9 @@ def api_rebuild_cache():
 
     job_id = _start_job("score_sync_full" if full else "score_sync", "score_sync", work,
                         initial_log=[t("rebuild_cache.loading")])
-    return jsonify({"job_id": job_id})
+    if job_id is None:
+        _release_rebuild_slot(sitemap_failed=False)
+    return _job_response(job_id)
 
 
 @app.route("/api/sync-library", methods=["POST"])
@@ -1531,7 +1627,7 @@ def api_sync_library():
         job["missing_originals"] = stats.get("missing_originals", [])
         return stats
 
-    return jsonify({"job_id": _start_job("sync", "sync", work)})
+    return _job_response(_start_job("sync", "sync", work))
 
 
 @app.route("/api/apply", methods=["POST"])
@@ -1554,7 +1650,7 @@ def api_apply():
             rating_keys=rating_keys,
         )
 
-    return jsonify({"job_id": _start_job("push", "push", work, total=len(rating_keys))})
+    return _job_response(_start_job("push", "push", work, total=len(rating_keys)))
 
 
 @app.route("/api/cleanup-posters", methods=["POST"])
@@ -1600,7 +1696,7 @@ def api_cleanup_posters():
         _emit(job_log, log_cleanup, "cleanup.done", count=removed_total)
         return {"plex_posters_removed": removed_total}
 
-    return jsonify({"job_id": _start_job("cleanup", "cleanup", work)})
+    return _job_response(_start_job("cleanup", "cleanup", work))
 
 
 @app.route("/api/job/<job_id>")

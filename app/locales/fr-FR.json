@@ -118,5 +118,7 @@
   "notice.run_as.chown_failed": "Wokearr fonctionne toujours en root : le dossier de données {data_dir} n'a pas pu être attribué à l'utilisateur {user} (montage en lecture seule ou réseau ?). Tout fonctionne. Pour changer, attribuez le dossier à {user} sur l'hôte ou réglez PUID/PGID sur son propriétaire – ou réglez PUID=0 pour rester en root et masquer cet avis.",
   "notice.run_as.not_writable": "Wokearr fonctionne toujours en root : l'utilisateur {user} ne peut pas écrire dans le dossier de données {data_dir}. Tout fonctionne. Pour changer, réglez PUID/PGID sur le propriétaire du dossier sur l'hôte – ou réglez PUID=0 pour rester en root et masquer cet avis.",
   "notice.run_as.invalid_ids": "Wokearr fonctionne en root car PUID/PGID ne sont pas des nombres ({user}). Tout fonctionne. Corrigez-les – ou réglez PUID=0 pour rester en root et masquer cet avis.",
-  "notice.more": "Détails"
+  "notice.more": "Détails",
+  "login.error_expired": "La page de connexion est restée ouverte trop longtemps. Veuillez réessayer.",
+  "api.busy": "Wokearr est occupé par d'autres tâches. Veuillez réessayer dans un instant."
 }

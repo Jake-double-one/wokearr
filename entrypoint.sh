@@ -14,6 +14,11 @@ set -u
 
 DATA_DIR="${DATA_DIR:-/data}"
 
+# What Wokearr itself keeps in /data. Only these are handed over - never the
+# whole mount, so a folder mounted there by mistake (a media drive, a backup)
+# keeps its owners.
+KNOWN_PATHS="score_cache.json url_state.json rendered_state.json pushed_state.json library_index.json run_history.json session_secret originals branded"
+
 log() {
     # Same layout as Wokearr's own log lines; one call per line
     level="$1"
@@ -31,19 +36,47 @@ as_root() {
     WOKEARR_RUN_AS_NOTICE="$1"
     export WOKEARR_RUN_AS_NOTICE
     shift
-    exec "$@"
+    exec setpriv --no-new-privs "$@"
 }
 
 run() {
+    # --no-new-privs: nothing started from here (a setuid binary, say) can
+    # gain privileges, whether or not the compose file says so. The bounding
+    # set is emptied as well where the kernel lets us (needs CAP_SETPCAP).
     # HOME: plexapi and gunicorn look for files under ~ - root's home is not
     # readable for the unprivileged user
-    exec setpriv --reuid="$PUID" --regid="$PGID" --clear-groups env HOME=/tmp "$@"
+    bounding=""
+    if setpriv --bounding-set=-all true 2>/dev/null; then
+        bounding="--bounding-set=-all"
+    fi
+    exec setpriv --reuid="$PUID" --regid="$PGID" --clear-groups --no-new-privs $bounding env HOME=/tmp "$@"
+}
+
+# True if /data itself or any of Wokearr's own files in it belong to someone
+# other than PUID:PGID
+needs_handover() {
+    [ -n "$(find "$DATA_DIR" -maxdepth 0 \( ! -user "$PUID" -o ! -group "$PGID" \) -print 2>/dev/null)" ] && return 0
+    for name in $KNOWN_PATHS; do
+        [ -e "$DATA_DIR/$name" ] || continue
+        [ -n "$(find "$DATA_DIR/$name" \( ! -user "$PUID" -o ! -group "$PGID" \) -print -quit 2>/dev/null)" ] && return 0
+    done
+    return 1
+}
+
+# chown -h: a symlink is changed itself, never what it points to
+hand_over() {
+    chown -h "$PUID:$PGID" "$DATA_DIR" 2>/dev/null || return 1
+    for name in $KNOWN_PATHS; do
+        [ -e "$DATA_DIR/$name" ] || continue
+        chown -hR "$PUID:$PGID" "$DATA_DIR/$name" 2>/dev/null || return 1
+    done
+    return 0
 }
 
 # Started with "user:"/--user or under rootless Podman with a mapped user:
 # privileges are already dropped, nothing left to do
 if [ "$(id -u)" != "0" ]; then
-    exec "$@"
+    exec setpriv --no-new-privs "$@"
 fi
 
 PUID="${PUID:-1000}"
@@ -57,14 +90,15 @@ case "$PUID$PGID" in
 esac
 
 if [ "$PUID" = "0" ]; then
-    exec "$@"
+    exec setpriv --no-new-privs "$@"
 fi
 
 mkdir -p "$DATA_DIR" 2>/dev/null
 
-# Hand /data over if anything in it belongs to someone else - typically the
-# first start after an update, when everything still belongs to root
-if [ -n "$(find "$DATA_DIR" \( ! -user "$PUID" -o ! -group "$PGID" \) -print -quit 2>/dev/null)" ]; then
+# Hand Wokearr's files over if any of them belong to someone else -
+# typically the first start after an update, when everything still belongs
+# to root
+if needs_handover; then
     # Update from a version that ran as root: /data itself still belongs to
     # root and holds data. (Fresh install: empty. Later: only single files,
     # e.g. written by "docker exec" as root - quietly handed back.)
@@ -72,11 +106,11 @@ if [ -n "$(find "$DATA_DIR" \( ! -user "$PUID" -o ! -group "$PGID" \) -print -qu
     if [ "$(stat -c %u "$DATA_DIR")" = "0" ] && [ -n "$(find "$DATA_DIR" -mindepth 1 -print -quit 2>/dev/null)" ]; then
         upgrade=1
     fi
-    if chown -R "$PUID:$PGID" "$DATA_DIR" 2>/dev/null; then
+    if hand_over; then
         if [ -n "$upgrade" ]; then
             log WARNING "$RULE" \
                 "CHANGE: Wokearr no longer runs as root, but as user $PUID:$PGID." \
-                "Your data in $DATA_DIR has been handed over to that user (one-time)." \
+                "Wokearr's data in $DATA_DIR has been handed over to that user (one-time)." \
                 "Nothing to do - everything keeps working as before." \
                 "Different user wanted? Set PUID/PGID. Keep running as root: PUID=0." \
                 "$RULE"

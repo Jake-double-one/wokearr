@@ -118,5 +118,7 @@
   "notice.run_as.chown_failed": "Wokearr è ancora in esecuzione come root: la cartella dati {data_dir} non può essere assegnata all'utente {user} (mount di sola lettura o di rete?). Tutto funziona. Per cambiare, assegna la cartella a {user} sull'host o imposta PUID/PGID sul suo proprietario, oppure imposta PUID=0 per restare root e nascondere questo avviso.",
   "notice.run_as.not_writable": "Wokearr è ancora in esecuzione come root: l'utente {user} non può scrivere nella cartella dati {data_dir}. Tutto funziona. Per cambiare, imposta PUID/PGID sul proprietario della cartella sull'host, oppure imposta PUID=0 per restare root e nascondere questo avviso.",
   "notice.run_as.invalid_ids": "Wokearr è in esecuzione come root perché PUID/PGID non sono numeri ({user}). Tutto funziona. Correggili, oppure imposta PUID=0 per restare root e nascondere questo avviso.",
-  "notice.more": "Dettagli"
+  "notice.more": "Dettagli",
+  "login.error_expired": "La pagina di accesso è rimasta aperta troppo a lungo. Riprova.",
+  "api.busy": "Wokearr è occupato con altre operazioni. Riprova tra un momento."
 }

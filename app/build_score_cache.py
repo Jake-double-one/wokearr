@@ -45,6 +45,12 @@ SITEMAP_URL = "https://isitwokeornot.com/sitemaps/titles-1.xml"
 SITEMAP_TIMEOUT = 30          # seconds per attempt
 SITEMAP_ATTEMPTS = 2          # one retry - a single slow response shouldn't cost the whole run
 SITEMAP_RETRY_PAUSE = 15      # seconds between attempts
+# Responses are read in full into memory - a cap keeps one oversized (or
+# hostile) answer from taking the whole container down. Review pages are
+# ~100 KB, the sitemap ~1 MB.
+MAX_PAGE_BYTES = 5 * 1024 * 1024
+MAX_SITEMAP_BYTES = 50 * 1024 * 1024
+MAX_TITLE_LENGTH = 200
 
 
 # Only review pages on the site itself are ever requested. The sitemap is
@@ -63,12 +69,35 @@ def is_review_url(url: str) -> bool:
     return parts.scheme == "https" and parts.hostname == ALLOWED_HOST and not parts.username and not parts.password
 
 
+class ResponseTooLarge(requests.RequestException):
+    """The response body exceeded the cap - treated like any other request failure."""
+
+
+def read_capped(response: requests.Response, limit: int) -> bytes:
+    """Body of a streamed response, or ResponseTooLarge once it passes limit."""
+    chunks, size = [], 0
+    for chunk in response.iter_content(chunk_size=64 * 1024):
+        size += len(chunk)
+        if size > limit:
+            response.close()
+            raise ResponseTooLarge(f"response larger than {limit} bytes", response=response)
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _text(response: requests.Response, limit: int) -> str:
+    body = read_capped(response, limit)
+    return body.decode(response.encoding or response.apparent_encoding or "utf-8", errors="replace")
+
+
 def _get_review_page(url: str) -> requests.Response:
-    """GET that follows redirects only while they stay on isitwokeornot.com."""
+    """GET that follows redirects only while they stay on isitwokeornot.com.
+    The body is left unread (stream=True) - see extract_one for the cap."""
     for _ in range(MAX_REDIRECTS + 1):
-        r = requests.get(url, headers=HEADERS, timeout=15, allow_redirects=False)
+        r = requests.get(url, headers=HEADERS, timeout=15, allow_redirects=False, stream=True)
         if not r.is_redirect:
             return r
+        r.close()
         target = urljoin(url, r.headers.get("Location", ""))
         if not is_review_url(target):
             log.warning("Not following redirect to another host: %s -> %s", url, target)
@@ -95,10 +124,11 @@ def _fetch_sitemap() -> str:
     for attempt in range(1, SITEMAP_ATTEMPTS + 1):
         started = time.monotonic()
         try:
-            resp = requests.get(SITEMAP_URL, headers=HEADERS, timeout=SITEMAP_TIMEOUT)
+            resp = requests.get(SITEMAP_URL, headers=HEADERS, timeout=SITEMAP_TIMEOUT, stream=True)
             resp.raise_for_status()
-            log.debug("Sitemap fetched in %.1fs (%d KB).", time.monotonic() - started, len(resp.content) // 1024)
-            return resp.text
+            text = _text(resp, MAX_SITEMAP_BYTES)
+            log.debug("Sitemap fetched in %.1fs (%d KB).", time.monotonic() - started, len(text) // 1024)
+            return text
         except requests.RequestException as e:
             elapsed = time.monotonic() - started
             if attempt < SITEMAP_ATTEMPTS and _is_retryable(e):
@@ -127,6 +157,36 @@ def get_title_urls() -> list[tuple[str, str | None]]:
     return entries
 
 
+def parse_score(value) -> int | None:
+    """The review's ratingValue as an int 0-100, or None for anything else.
+    The page is external input: a string, a float, HTML or a number out of
+    range must never land in the score database - a bad value there would
+    stop every later render (score_band compares numbers)."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+        if not re.fullmatch(r"\d{1,3}", value):
+            return None
+        value = int(value)
+    if isinstance(value, float):
+        if not value.is_integer():
+            return None
+        value = int(value)
+    if not isinstance(value, int) or not 0 <= value <= 100:
+        return None
+    return value
+
+
+def clean_title(value) -> str | None:
+    """One line of plain text, or None - the title goes into the log, the
+    run protocol and notifications."""
+    if not isinstance(value, str):
+        return None
+    value = " ".join(value.split())
+    return value[:MAX_TITLE_LENGTH] or None
+
+
 def extract_one(url: str, lastmod: str | None) -> tuple[dict | None, str]:
     """Fetches one review page. Returns (entry, status); entry is None unless
     status is "ok". The status is kept per URL (see URL_STATE_FILE) so a page
@@ -136,8 +196,9 @@ def extract_one(url: str, lastmod: str | None) -> tuple[dict | None, str]:
         if r.is_redirect:
             return None, "foreign_redirect"
         if r.status_code >= 400:
+            r.close()
             return None, f"http_{r.status_code}"
-        html = r.text
+        html = _text(r, MAX_PAGE_BYTES)
         blocks = re.findall(r'<script type="application/ld\+json">(.*?)</script>', html, re.S)
         review = None
         for b in blocks:
@@ -145,7 +206,8 @@ def extract_one(url: str, lastmod: str | None) -> tuple[dict | None, str]:
                 data = json.loads(b)
             except json.JSONDecodeError:
                 continue
-            if data.get("@type") == "Review":
+            # JSON-LD may also be a list or a bare value - only an object can be the review
+            if isinstance(data, dict) and data.get("@type") == "Review":
                 review = data
         if review is None:
             return None, "no_review"
@@ -154,13 +216,17 @@ def extract_one(url: str, lastmod: str | None) -> tuple[dict | None, str]:
         imdb_match = re.search(r"imdb\.com/title/(tt\d+)", html)
         if not tmdb_match:
             return None, "no_tmdb_id"
+        score = parse_score(review["reviewRating"]["ratingValue"])
+        if score is None:
+            return None, "bad_review"
+        item = review.get("itemReviewed")
 
         media_type, tmdb_id = tmdb_match.group(1), tmdb_match.group(2)
         slug = url.rstrip("/").rsplit("/", 1)[-1]
         return {
             "key": f"{media_type}:{tmdb_id}",
-            "title": review.get("itemReviewed", {}).get("name"),
-            "score": review["reviewRating"]["ratingValue"],
+            "title": clean_title(item.get("name")) if isinstance(item, dict) else None,
+            "score": score,
             "imdb_id": imdb_match.group(1) if imdb_match else None,
             "slug": slug,
             "media_type": media_type,
@@ -169,7 +235,7 @@ def extract_one(url: str, lastmod: str | None) -> tuple[dict | None, str]:
         }, "ok"
     except requests.RequestException:
         return None, "request_error"
-    except (KeyError, TypeError, ValueError):
+    except (KeyError, TypeError, ValueError, AttributeError):
         # Review block present, but not in the shape we expect
         return None, "bad_review"
     finally:

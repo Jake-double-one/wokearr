@@ -3,6 +3,60 @@
 All notable changes to Wokearr, newest first. Version numbers match the image
 tags on `ghcr.io/jake-double-one/wokearr`.
 
+## [Unreleased]
+
+### Security
+Hardening from a second audit. None of it changes how Wokearr is used or
+configured.
+- **External input is validated.** A review page whose score isn't a whole
+  number from 0 to 100, or whose JSON-LD isn't the expected shape, is
+  skipped instead of stored - a bad value there used to stop every later
+  render. Titles are cut to one line. A page or poster larger than expected
+  is refused instead of read into memory, and request bodies are capped.
+- **One job at a time.** Manual buttons and the autopilot run one after
+  another; a click while something runs waits its turn (progress bar at 0),
+  and a flood of clicks gets "busy" instead of a flood of Plex uploads. The
+  library listing is kept for 30 seconds, so a burst of page loads can't tie
+  up every worker thread.
+- **The Plex token no longer travels in URLs.** Poster downloads send it as
+  a header, like plexapi does - so it never reaches Plex's own log, a proxy
+  log or an error message in the first place. A poster response Plex answers
+  with an error is no longer cached as the "original".
+- **Agent poster URLs are checked.** Plex hands out absolute URLs for agent
+  posters; only public http(s) addresses are fetched, never something inside
+  the local network.
+- **Log lines can't be forged:** a line break in a title from Plex or
+  isitwokeornot.com is escaped, so fail2ban sees what really happened.
+- **The login form carries a token** tied to the session cookie, so a
+  foreign page can't post wrong passwords from a visitor's browser and lock
+  their address out. Logging out is a POST now; a `GET /logout` only goes
+  back to the start page.
+- **The container locks itself down:** the app process runs with
+  `no-new-privs` and an empty capability bounding set whether or not the
+  compose file asks for it. Only Wokearr's own files in `/data` are handed
+  over to `PUID:PGID` on the first start - a folder mounted there by mistake
+  keeps its owners.
+- `/healthz` only says whether Wokearr is up; version and settings stay
+  behind the login in `/api/status`.
+
+### Added
+- `TRUSTED_PROXIES`: behind a reverse proxy, the login rate limit and the
+  log can now see the real client. List the proxy's address or network, and
+  Wokearr takes the client from that proxy's `X-Forwarded-For`; from anyone
+  else the header stays ignored. Optional - nothing changes without it.
+
+### Fixed
+- When one of several libraries can't be read (renamed, wrong type), the
+  cleanup of cached posters is skipped for that run instead of treating the
+  library's titles as removed.
+- **Installed as a web app** (home screen on iPhone/Android): the status
+  bar is dark like the rest of the page instead of white, the splash screen
+  and app icon match, and the page keeps clear of the notch. A web app
+  manifest (`/static/manifest.json`) with 192/512 px icons was added.
+- The login fields are no longer focused automatically when the page
+  opens: iOS only offers saved passwords (1Password, iCloud Keychain) on a
+  tap, so the automatic focus kept the offer from appearing.
+
 ## [v0.5.0] – 2026-10-18
 
 ### Security
@@ -347,6 +401,7 @@ ready-built image on GHCR for Docker Compose and Portainer.
 Note: the tag `v0.2` points at the same commit as `v0.2.2` – an accidental
 duplicate, not a separate release.
 
+[Unreleased]: https://github.com/Jake-double-one/wokearr/compare/v0.5.0...main
 [v0.5.0]: https://github.com/Jake-double-one/wokearr/compare/v0.4.1...v0.5.0
 [v0.4.1]: https://github.com/Jake-double-one/wokearr/compare/v0.4.0...v0.4.1
 [v0.4.0]: https://github.com/Jake-double-one/wokearr/compare/v0.3.2...v0.4.0

@@ -94,6 +94,7 @@ e.g. to `:v0.1.0`.
 | `NOTIFY_ON` | no | `error,changes` | What to notify about: `error` (a stage failed) and/or `changes` (new titles badged, scores of your titles changed) |
 | `AUTH_METHOD` | no | `none` | Login in front of the UI: `none` \| `basic` (browser popup, e.g. for authentik) \| `forms` (login page). See [Authentication](#authentication) |
 | `AUTH_USERNAME` / `AUTH_PASSWORD` | with `basic`/`forms` | – | The login, shared by `basic` and `forms`. Instead of `AUTH_PASSWORD`, `AUTH_PASSWORD_FILE` can point to a file (Docker secrets) |
+| `TRUSTED_PROXIES` | no | empty | Reverse proxies whose `X-Forwarded-For` names the real client, comma-separated addresses or networks (e.g. `172.18.0.0/16`). Only matters with a login in front of a proxy, see [Authentication](#authentication) |
 | `LOG_LEVEL` | no | `INFO` | Detail of the container log: `DEBUG` \| `INFO` \| `WARNING` \| `ERROR`. `DEBUG` adds a line per title (see [Container log](#container-log)) |
 | `PUID` / `PGID` | no | `1000` | User/group Wokearr runs as, and who owns the files in `/data`. `PUID=0` runs as root. See [Running without root](#running-without-root) |
 
@@ -255,9 +256,14 @@ Also, whenever a login is active:
   restart doesn't log you out.
 - `/healthz` stays reachable without a login, for Docker's health check.
 - The rate limit counts the address that connects to Wokearr. Behind a reverse
-  proxy that is the proxy for everyone, so a burst of failed logins locks out
-  all users for up to 15 minutes - the price of not trusting
-  `X-Forwarded-For`, which anyone can fake.
+  proxy that is the proxy for everyone, so a burst of failed logins would lock
+  out all users for up to 15 minutes, and the log would only ever name the
+  proxy. Set `TRUSTED_PROXIES` to the proxy's address (or network, e.g.
+  `172.18.0.0/16`) and Wokearr takes the client from its `X-Forwarded-For`
+  instead. Without it the header is ignored, because anyone can fake it. To
+  find the address: a login line in the log reads
+  `from 172.18.0.5 (X-Forwarded-For: 192.168.1.20)` - the first address is
+  the proxy.
 
 ### Security
 

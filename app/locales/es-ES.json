@@ -118,5 +118,7 @@
   "notice.run_as.chown_failed": "Wokearr sigue ejecutándose como root: la carpeta de datos {data_dir} no se pudo asignar al usuario {user} (¿montaje de solo lectura o de red?). Todo funciona. Para cambiarlo, asigna la carpeta a {user} en el host o ajusta PUID/PGID a su propietario, o pon PUID=0 para seguir como root y ocultar este aviso.",
   "notice.run_as.not_writable": "Wokearr sigue ejecutándose como root: el usuario {user} no puede escribir en la carpeta de datos {data_dir}. Todo funciona. Para cambiarlo, ajusta PUID/PGID al propietario de la carpeta en el host, o pon PUID=0 para seguir como root y ocultar este aviso.",
   "notice.run_as.invalid_ids": "Wokearr se ejecuta como root porque PUID/PGID no son números ({user}). Todo funciona. Corrígelos, o pon PUID=0 para seguir como root y ocultar este aviso.",
-  "notice.more": "Detalles"
+  "notice.more": "Detalles",
+  "login.error_expired": "La página de inicio de sesión estuvo abierta demasiado tiempo. Inténtalo de nuevo.",
+  "api.busy": "Wokearr está ocupado con otras tareas. Inténtalo de nuevo en un momento."
 }

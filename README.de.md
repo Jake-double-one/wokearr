@@ -95,6 +95,7 @@ reicht in Portainer **Stacks -> wokearr -> Pull and redeploy** (zieht das
 | `NOTIFY_ON` | nein | `error,changes` | Worüber benachrichtigt wird: `error` (eine Stufe ist fehlgeschlagen) und/oder `changes` (neue Titel gebadged, Scores eurer Titel geändert) |
 | `AUTH_METHOD` | nein | `none` | Anmeldung vor der Oberfläche: `none` \| `basic` (Browser-Anmeldefenster, z. B. für authentik) \| `forms` (Anmeldeseite). Siehe [Anmeldung](#anmeldung) |
 | `AUTH_USERNAME` / `AUTH_PASSWORD` | bei `basic`/`forms` | – | Die Zugangsdaten, gemeinsam für `basic` und `forms`. Statt `AUTH_PASSWORD` kann `AUTH_PASSWORD_FILE` auf eine Datei zeigen (Docker Secrets) |
+| `TRUSTED_PROXIES` | nein | leer | Reverse Proxys, deren `X-Forwarded-For` den echten Client nennt – Adressen oder Netze, kommagetrennt (z. B. `172.18.0.0/16`). Nur relevant mit Anmeldung hinter einem Proxy, siehe [Anmeldung](#anmeldung) |
 | `LOG_LEVEL` | nein | `INFO` | Ausführlichkeit des Container-Logs: `DEBUG` \| `INFO` \| `WARNING` \| `ERROR`. `DEBUG` ergänzt eine Zeile pro Titel (siehe [Container-Log](#container-log)) |
 
 \* Ohne diese beiden Variablen läuft die App im Demo-Modus.
@@ -266,8 +267,12 @@ Außerdem, sobald eine Anmeldung aktiv ist:
 - `/healthz` bleibt ohne Anmeldung erreichbar, für den Docker-Healthcheck.
 - Die Sperre zählt die Adresse, die sich mit Wokearr verbindet. Hinter einem
   Reverse Proxy ist das für alle der Proxy – eine Serie von Fehlversuchen
-  sperrt dann alle Nutzer für bis zu 15 Minuten aus. Das ist der Preis dafür,
-  `X-Forwarded-For` nicht zu vertrauen, denn das kann jeder fälschen.
+  würde dann alle Nutzer für bis zu 15 Minuten aussperren, und im Log stünde
+  immer nur der Proxy. Mit `TRUSTED_PROXIES` auf die Adresse des Proxys (oder
+  sein Netz, z. B. `172.18.0.0/16`) nimmt Wokearr den Client aus dessen
+  `X-Forwarded-For`. Ohne die Variable wird der Header ignoriert, denn den
+  kann jeder fälschen. Die Adresse findet sich im Log: Eine Login-Zeile wie
+  `from 172.18.0.5 (X-Forwarded-For: 192.168.1.20)` nennt zuerst den Proxy.
 
 ### Sicherheit
 

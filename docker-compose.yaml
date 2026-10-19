@@ -42,6 +42,9 @@ services:
       AUTH_PASSWORD: "${AUTH_PASSWORD:-}"
       # Or keep the password out of this file (Docker secrets):
       # AUTH_PASSWORD_FILE: "/run/secrets/wokearr_password"
+      # Behind a reverse proxy: its address/network, so the login rate limit
+      # counts the real client - see README "Authentication"
+      TRUSTED_PROXIES: "${TRUSTED_PROXIES:-}"
       # e.g. gotifys://gotify.example.com/APP_TOKEN - see README
       NOTIFY_URL: "${NOTIFY_URL:-}"
       NOTIFY_ON: "${NOTIFY_ON:-error,changes}"

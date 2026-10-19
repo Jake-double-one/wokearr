@@ -63,6 +63,10 @@ configured.
   else the header stays ignored. Optional - nothing changes without it.
 
 ### Fixed
+- After an update, browsers kept the previous `app.js` and `style.css` for
+  hours and ran them against the new page - tiles showing `card.push`, a
+  menu without styling. Static files now carry a content hash in their URL,
+  so every update is picked up on the next page load.
 - When one of several libraries can't be read (renamed, wrong type), the
   cleanup of cached posters is skipped for that run instead of treating the
   library's titles as removed.

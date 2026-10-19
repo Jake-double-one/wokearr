@@ -373,11 +373,16 @@ und jede Stufe selbst antriggern wollen:
 - **Score-Datenbank aktualisieren** – nur Stufe 1, inkrementell.
 - **Jetzt synchronisieren** – nur Stufe 2 (Plex-Abgleich, Original- und
   gebrandete Poster pflegen, Leichen entfernen). Kein Push zu Plex.
-- **Auf Plex übertragen** (Alle-Button oder einzeln pro Titel) – nur Stufe 3,
-  erzwungen: lädt das gerenderte Poster unabhängig davon hoch, ob sich der
-  Score seit dem letzten Push geändert hat (z. B. praktisch nach einer
-  geänderten Badge-Einstellung, um alles neu zu erzwingen). Rendert bei
-  Bedarf automatisch nach, falls noch nicht synchronisiert wurde.
+- **Auf Plex übertragen** (Alle-Button) – nur Stufe 3, erzwungen: lädt das
+  gerenderte Poster unabhängig davon hoch, ob sich der Score seit dem
+  letzten Push geändert hat (z. B. praktisch nach einer geänderten
+  Badge-Einstellung, um alles neu zu erzwingen). Rendert bei Bedarf
+  automatisch nach, falls noch nicht synchronisiert wurde.
+- **Aktualisieren** (Button auf der Kachel eines Titels) – alle drei Stufen
+  nur für diesen Titel: seine Review-Seite wird bei isitwokeornot.com neu
+  abgerufen (nur diese Seite, nicht die Sitemap), das Badge mit dem aktuellen
+  Score gerendert und auf Plex übertragen, Staffeln eingeschlossen. Erzwungen
+  wie "Auf Plex übertragen".
 - **Kompletter Neuaufbau** – wie "Score-Datenbank aktualisieren", fragt aber
   wirklich alle Titel bei isitwokeornot.com erneut ab (z. B. um
   zwischenzeitlich geänderte Scores nachzuziehen). Dauert entsprechend länger.

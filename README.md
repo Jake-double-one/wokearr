@@ -355,10 +355,14 @@ default) and wants to trigger each stage themselves:
 - **Update Score Database** - stage 1 only, incremental.
 - **Sync Now** - stage 2 only (Plex comparison, maintain original and branded
   posters, remove orphans). No push to Plex.
-- **Push to Plex** (the "all" button or per title) - stage 3 only, forced:
-  uploads the rendered poster regardless of whether the score has changed
-  since the last push (useful, e.g., after changing a badge setting, to force
-  everything to re-upload). Renders on demand if not already synced.
+- **Push to Plex** (the "all" button) - stage 3 only, forced: uploads the
+  rendered poster regardless of whether the score has changed since the last
+  push (useful, e.g., after changing a badge setting, to force everything to
+  re-upload). Renders on demand if not already synced.
+- **Refresh** (the button on a title's tile) - all three stages for just
+  this title: its review page is fetched again from isitwokeornot.com (only
+  that page, not the sitemap), the badge is rendered with the current score
+  and pushed to Plex, seasons included. Forced like "Push to Plex".
 - **Full Rebuild** - like "Update Score Database", but really re-queries
   every title at isitwokeornot.com (e.g. to pick up scores that changed in
   the meantime). Takes correspondingly longer.

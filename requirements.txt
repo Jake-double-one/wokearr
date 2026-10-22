@@ -1,6 +1,24 @@
+# What Wokearr uses directly
 flask==3.1.3
 gunicorn==26.2.0
 plexapi==4.18.3
 requests==2.34.2
 pillow==12.3.0
 croniter==6.2.4
+
+# Pulled in by the above - pinned too, so every image build ships the same
+# set and the tests have seen exactly what runs. Dependabot keeps all of
+# these current in one weekly pull request.
+blinker==1.9.0
+certifi==2026.10.19
+charset-normalizer==3.5.2
+click==8.5.0
+idna==3.20
+itsdangerous==2.2.0
+jinja2==3.1.6
+markupsafe==3.0.4
+python-dateutil==3.0.0
+six==1.17.0
+tzdata==2026.5
+urllib3==2.8.0
+werkzeug==3.1.9

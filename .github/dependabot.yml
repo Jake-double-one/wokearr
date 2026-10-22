@@ -5,6 +5,11 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    # requirements.txt pins the transitive packages as well - one PR for
+    # all of them, not one per package
+    groups:
+      python-packages:
+        patterns: ["*"]
   - package-ecosystem: docker
     directory: "/"
     schedule:

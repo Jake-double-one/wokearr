@@ -43,6 +43,8 @@ configured.
   certifi 2026.7.22 → 2026.10.19 (PYSEC-2026-4320).
 - The image build upgrades pip before installing anything - the base
   image's copy lags behind by months. pip never runs in the container itself.
+- The dependency audit also runs every morning, not only on pull requests,
+  and opens a GitHub issue when a pinned package has a known vulnerability.
 - `requirements.txt` pins the transitive packages as well, so every image
   build ships the same set and the tests have seen exactly what runs - a
   rebuild had silently picked up python-dateutil 3.0.0 (and its new

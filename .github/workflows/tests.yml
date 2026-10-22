@@ -4,12 +4,20 @@ on:
   pull_request:
   push:
     branches: ["main"]
+  # The audit also runs every morning: advisories arrive whether or not a
+  # pull request is open (Pillow collected 35 within four days once). A
+  # failed scheduled audit opens an issue, so nobody has to watch the
+  # Actions tab.
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   tests:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +35,9 @@ jobs:
   dependency-audit:
     # Known vulnerabilities in the pinned packages - and in what they pull in
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write  # for the issue a failed scheduled audit opens
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -38,11 +49,39 @@ jobs:
           python -m pip install -U pip setuptools
           pip install -r requirements.txt pip-audit
       - name: Audit installed packages
-        run: pip-audit --skip-editable
+        run: |
+          set -o pipefail
+          pip-audit --skip-editable 2>&1 | tee audit.txt
+      - name: Report a failed scheduled audit as an issue
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "The daily \`pip-audit\` of the pinned packages found known vulnerabilities."
+            echo "Bump the affected packages in \`requirements.txt\` (Dependabot's weekly PR may already do it)."
+            echo
+            echo "Run: $RUN_URL"
+            echo
+            echo '```'
+            cat audit.txt
+            echo '```'
+          } > body.md
+          gh label create dependency-audit --color D93F0B --description "Known vulnerability in a pinned package" --force
+          existing="$(gh issue list --label dependency-audit --state open --json number --jq '.[0].number')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file body.md
+          else
+            gh issue create --title "Dependency audit: known vulnerabilities in pinned packages" \
+              --label dependency-audit --body-file body.md
+          fi
 
   container:
     # The image as users get it: drops root, takes over data from versions
     # that ran as root, falls back to root where it can't (tests/container_test.sh)
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

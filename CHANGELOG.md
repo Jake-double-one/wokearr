@@ -38,6 +38,15 @@ configured.
   keeps its owners.
 - `/healthz` only says whether Wokearr is up; version and settings stay
   behind the login in `/api/status`.
+- Dependencies: Pillow 12.3.0 → 13.0.0 (35 advisories published since the
+  last audit, in image and archive handling - Pillow processes the posters),
+  certifi 2026.7.22 → 2026.10.19 (PYSEC-2026-4320).
+- The image build upgrades pip before installing anything - the base
+  image's copy lags behind by months. pip never runs in the container itself.
+- `requirements.txt` pins the transitive packages as well, so every image
+  build ships the same set and the tests have seen exactly what runs - a
+  rebuild had silently picked up python-dateutil 3.0.0 (and its new
+  dependency tzdata). Dependabot bundles the weekly updates into one PR.
 
 ### Changed
 - **A simpler top bar.** One button, **Update all**, runs the autopilot's

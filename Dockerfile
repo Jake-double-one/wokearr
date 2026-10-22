@@ -9,7 +9,10 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# pip itself first: the base image's copy lags behind by months, and pip is
+# what unpacks everything that follows. Only ever runs at build time.
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
 
 COPY app/ .
 COPY entrypoint.sh /usr/local/bin/wokearr-entrypoint

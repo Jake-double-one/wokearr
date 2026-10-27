@@ -468,12 +468,18 @@ def _is_upload_poster(p) -> bool:
     return "upload://posters" in key or "upload%3A%2F%2Fposters" in key
 
 
-def fetch_original_poster_bytes(plex, item) -> tuple[bytes, bool]:
+class NoOriginalPoster(Exception):
+    """Nothing clean to put a badge on: Plex offers no agent poster for the
+    title, and its current poster is already one of Wokearr's own badges (or
+    can't be read). The title is left alone until someone picks another
+    poster for it in Plex."""
+
+
+def fetch_original_poster_bytes(plex, item) -> tuple[bytes | None, bool]:
     """
     Returns the unbadged original poster. Reads primarily from the local
-    cache (ORIGINALS_DIR) - only things previously and unambiguously verified
-    as an agent original land there, so the trust is justified and a fresh
-    live check against Plex isn't needed.
+    cache (ORIGINALS_DIR) - whatever lands there is what the badge gets
+    rendered onto, so a fresh live check against Plex isn't needed.
 
     Only if nothing is cached yet for this title (e.g. new in Plex) does it
     check live against Plex: go through all poster candidates, always ignore
@@ -483,9 +489,12 @@ def fetch_original_poster_bytes(plex, item) -> tuple[bytes, bool]:
     (agent) candidate. The badge marker here only serves as an extra safety
     check on the chosen candidate.
 
-    If no usable candidate is found at all, the currently selected poster is
-    used as a last resort (may theoretically already be badged). Returns
-    (image_bytes, original_found).
+    If no usable candidate is found at all (a season the agent has no art
+    for, say), the currently selected poster is the last resort: it is
+    cached as the original if it verifiably isn't one of Wokearr's own
+    badges. Returns (image_bytes, agent_original_found): (bytes, True) for an
+    agent poster, (bytes, False) for the last resort, and (None, False) when
+    not even that is clean - then there is nothing to badge.
     """
     cached = ORIGINALS_DIR / f"{item.ratingKey}.jpg"
     if cached.exists():
@@ -503,7 +512,14 @@ def fetch_original_poster_bytes(plex, item) -> tuple[bytes, bool]:
     except Exception:
         pass
 
-    return _plex_get(plex, item.thumb), False
+    if not getattr(item, "thumb", None):
+        return None, False
+    data = _plex_get(plex, item.thumb)
+    # False, not "not True": an unreadable poster must not become the original either
+    if _is_own_badge(data) is False:
+        cached.write_bytes(data)
+        return data, False
+    return None, False
 
 
 def cleanup_old_uploaded_posters(plex, item) -> int:
@@ -804,6 +820,12 @@ def push_to_plex(plex, item, entry: dict, force: bool = False) -> None:
     self-uploads. Tracks the uploaded score (PUSHED_STATE_FILE). Shared by
     "Push to Plex" and the autopilot.
     """
+    if not (ORIGINALS_DIR / f"{item.ratingKey}.jpg").exists():
+        # Not synced yet, or nothing was found last time - look again, so a
+        # poster picked in Plex in the meantime is used
+        data, _ = fetch_original_poster_bytes(plex, item)
+        if data is None:
+            raise NoOriginalPoster(_display_title(item))
     branded_path = render_branded_image(item, entry, force=force)
     item.uploadPoster(filepath=str(branded_path))
     if CLEANUP_OLD_POSTERS:
@@ -1011,14 +1033,19 @@ def sync_library(log=None) -> dict:
 
     # Fetch original posters where none is cached yet
     to_warm = [(item, entry) for rk, item, entry in titled_entries if not (ORIGINALS_DIR / f"{rk}.jpg").exists()]
-    warnings = []
+    warnings, unusable = [], []
+    fetched = 0
     if to_warm:
         with ThreadPoolExecutor(max_workers=POSTER_WORKERS) as pool:
             futures = {pool.submit(fetch_original_poster_bytes, plex, item): item for item, _ in to_warm}
             for f in as_completed(futures):
                 item = futures[f]
                 try:
-                    _, found = f.result()
+                    data, found = f.result()
+                    if data is None:
+                        unusable.append(_display_title(item))
+                        continue
+                    fetched += 1
                     if not found:
                         warnings.append(_display_title(item))
                     else:
@@ -1026,9 +1053,12 @@ def sync_library(log=None) -> dict:
                 except Exception as e:
                     _emit(log, log_plex, "sync.poster_fetch_error", level=logging.WARNING,
                           title=_display_title(item), error=_describe(e))
-        _emit(log, log_plex, "sync.posters_fetched", count=len(to_warm))
+        if fetched:
+            _emit(log, log_plex, "sync.posters_fetched", count=fetched)
     if warnings:
         _emit(log, log_plex, "sync.missing_originals_warning", level=logging.WARNING, titles=", ".join(warnings))
+    if unusable:
+        _emit(log, log_plex, "sync.no_clean_poster", level=logging.WARNING, titles=", ".join(unusable))
 
     # Render the branded version for new/changed titles
     rendered_state = _load_state_file(RENDERED_STATE_FILE)
@@ -1080,7 +1110,7 @@ def sync_library(log=None) -> dict:
 
     return {
         "matched": matched_titles,
-        "originals_fetched": len(to_warm),
+        "originals_fetched": fetched,
         "rendered": rendered,
         "orphans_removed": removed,
         "missing_originals": warnings,
@@ -1153,6 +1183,10 @@ def push_pending_to_plex(log=None, progress=None, force: bool = False, rating_ke
         rk = str(item.ratingKey)
         try:
             push_to_plex(plex, item, entry, force)
+        except NoOriginalPoster:
+            # Not a failure of the run: there is nothing clean to badge until
+            # someone picks another poster for the title in Plex
+            _emit(log, log_push, "push.no_original", level=logging.WARNING, title=_display_title(item))
         except Exception as e:
             _emit(log, log_push, "push.error", level=logging.WARNING, title=_display_title(item), error=_describe(e))
             log_push.debug("Traceback for %s:", _display_title(item), exc_info=True)
@@ -1227,20 +1261,24 @@ def refresh_titles(log=None, progress=None, rating_keys=()) -> dict:
 
     # The push renders from the cached original - make sure there is one,
     # for a show's seasons too (a title never synced has none yet)
-    missing = []
+    missing, unusable = [], []
     for rk, (item, prefix) in selection.items():
         for target in [item] + (_seasons_for_show(item) if prefix == "tv" else []):
             if (ORIGINALS_DIR / f"{target.ratingKey}.jpg").exists():
                 continue
             try:
-                _, found = fetch_original_poster_bytes(plex, target)
-                if not found:
+                data, found = fetch_original_poster_bytes(plex, target)
+                if data is None:
+                    unusable.append(_display_title(target))
+                elif not found:
                     missing.append(_display_title(target))
             except Exception as e:
                 _emit(log, log_plex, "sync.poster_fetch_error", level=logging.WARNING,
                       title=_display_title(target), error=_describe(e))
     if missing:
         _emit(log, log_plex, "sync.missing_originals_warning", level=logging.WARNING, titles=", ".join(missing))
+    if unusable:
+        _emit(log, log_plex, "sync.no_clean_poster", level=logging.WARNING, titles=", ".join(unusable))
 
     stats = push_pending_to_plex(log=log, progress=progress, force=True, rating_keys=list(selection))
     stats["scores_updated"] = refreshed

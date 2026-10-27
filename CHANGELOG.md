@@ -74,6 +74,15 @@ configured.
   else the header stays ignored. Optional - nothing changes without it.
 
 ### Fixed
+- **A title without an agent poster in Plex (typically a season) failed
+  every run.** Since the render/upload split in September, the promised
+  fallback - "the current poster is used as the base" - was never actually
+  used: the title was retried every hour, the push failed with "no original
+  poster in cache", the run was marked as failed and a notification went
+  out. Now the current poster really is the base, provided it isn't one of
+  Wokearr's own badges; if it is, the title is skipped with a note (pick
+  another poster for it in Plex) and the run stays green. "Original
+  posters: N newly fetched" now counts only posters that were found.
 - After an update, browsers kept the previous `app.js` and `style.css` for
   hours and ran them against the new page - tiles showing `card.push`, a
   menu without styling. Static files now carry a content hash in their URL,

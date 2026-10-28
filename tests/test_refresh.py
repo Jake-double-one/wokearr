@@ -74,3 +74,58 @@ def test_refresh_endpoint(make_app):
                 break
             __import__("time").sleep(0.02)
     assert refresh.call_args.kwargs["rating_keys"] == ["7"]
+
+
+def _jpeg(marker: bool) -> bytes:
+    """A real tiny JPEG - with Wokearr's badge marker, or clean."""
+    import io
+    from PIL import Image
+    buf = io.BytesIO()
+    kwargs = {"comment": b"wokearr-badge"} if marker else {}
+    Image.new("RGB", (8, 12), (10, 20, 30)).save(buf, format="JPEG", **kwargs)
+    return buf.getvalue()
+
+
+def test_a_title_without_agent_poster_uses_its_current_poster(make_app):
+    """Plex has no agent artwork for the title (a season, typically): the
+    current poster becomes the base - if it isn't one of our badges."""
+    wa = make_app(PLEX_URL="http://plex.local:32400", PLEX_TOKEN=TOKEN)
+    season = MagicMock(ratingKey=42, title="Season 4", parentTitle="Lupin", thumb="/library/metadata/42/thumb/1",
+                       posters=lambda: [])
+    with patch.object(wa, "_plex_get", return_value=_jpeg(marker=False)):
+        data, found = wa.fetch_original_poster_bytes(MagicMock(), season)
+    assert data and found is False
+    assert (wa.ORIGINALS_DIR / "42.jpg").exists(), "cached, so it can be rendered and pushed"
+
+
+def test_a_title_whose_only_poster_is_our_badge_is_skipped_without_failing_the_run(make_app):
+    wa = make_app(PLEX_URL="http://plex.local:32400", PLEX_TOKEN=TOKEN)
+    season = MagicMock(ratingKey=43, title="Season 5", parentTitle="Lupin", thumb="/library/metadata/43/thumb/1",
+                       posters=lambda: [])
+    with patch.object(wa, "_plex_get", return_value=_jpeg(marker=True)):
+        assert wa.fetch_original_poster_bytes(MagicMock(), season) == (None, False)
+    assert not (wa.ORIGINALS_DIR / "43.jpg").exists()
+
+    # push: a warning, not an error - the run stays green
+    messages = []
+    with patch.object(wa, "_plex_get", return_value=_jpeg(marker=True)):
+        try:
+            wa.push_to_plex(MagicMock(), season, {"score": 50})
+        except wa.NoOriginalPoster:
+            pass
+        else:
+            raise AssertionError("expected NoOriginalPoster")
+    show = MagicMock(ratingKey=7, title="Lupin", guids=[MagicMock(id="tmdb://1")], parentTitle=None,
+                     seasons=lambda: [season])
+    section = MagicMock(type="show")
+    section.all.return_value = [show]
+    plex = MagicMock()
+    plex.library.section.return_value = section
+    wa.CACHE_FILE.write_text(json.dumps({"tv:1": {"title": "Lupin", "score": 50, "url": "https://isitwokeornot.com/tv/l"}}),
+                             encoding="utf-8")
+    (wa.ORIGINALS_DIR / "7.jpg").write_bytes(_jpeg(marker=False))
+    with patch.object(wa, "get_plex", return_value=plex), patch.object(wa, "_plex_get", return_value=_jpeg(marker=True)), \
+            patch.object(wa, "add_badge", side_effect=lambda src, score, out, **kw: open(out, "wb").write(b"x")):
+        stats = wa.push_pending_to_plex(log=messages.append, rating_keys=["7"])
+    assert stats["pushed"] == 1 and stats["push_failed"] == 0 and stats["push_error"] is None
+    assert any("Season 5" in m and ("bersprungen" in m or "Skipped" in m) for m in messages)

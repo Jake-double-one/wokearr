@@ -3,7 +3,7 @@
 All notable changes to Wokearr, newest first. Version numbers match the image
 tags on `ghcr.io/jake-double-one/wokearr`.
 
-## [Unreleased]
+## [v0.6.0] – 2026-11-09
 
 ### Security
 Hardening from a second audit. None of it changes how Wokearr is used or
@@ -102,6 +102,12 @@ configured.
 - The login fields are no longer focused automatically when the page
   opens: iOS only offers saved passwords (1Password, iCloud Keychain) on a
   tap, so the automatic focus kept the offer from appearing.
+
+### Upgrade note
+Nothing to do - pull the new image and everything keeps working. The
+`/data` folder, settings and compose file stay as they are. Behind a
+reverse proxy, `TRUSTED_PROXIES` is worth setting so the login rate limit
+sees real clients instead of the proxy (see README).
 
 ## [v0.5.0] – 2026-10-18
 
@@ -448,6 +454,7 @@ Note: the tag `v0.2` points at the same commit as `v0.2.2` – an accidental
 duplicate, not a separate release.
 
 [Unreleased]: https://github.com/Jake-double-one/wokearr/compare/v0.5.0...main
+[v0.6.0]: https://github.com/Jake-double-one/wokearr/compare/v0.5.0...v0.6.0
 [v0.5.0]: https://github.com/Jake-double-one/wokearr/compare/v0.4.1...v0.5.0
 [v0.4.1]: https://github.com/Jake-double-one/wokearr/compare/v0.4.0...v0.4.1
 [v0.4.0]: https://github.com/Jake-double-one/wokearr/compare/v0.3.2...v0.4.0

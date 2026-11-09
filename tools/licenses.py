@@ -24,7 +24,7 @@ from pip._vendor.packaging.requirements import Requirement
 # Not Python packages, so not in any metadata - kept by hand
 OTHER_COMPONENTS = [
     ("Python", "PSF-2.0", "https://docs.python.org/3/license.html",
-     "Interpreter and standard library (base image python:3.12-slim)."),
+     "Interpreter and standard library (base image python:3.15-slim)."),
     ("DejaVu fonts", "Bitstream-Vera AND LicenseRef-DejaVu-public-domain",
      "https://dejavu-fonts.github.io/License.html",
      "Font of the badge label (Debian package fonts-dejavu-core); full text in the "

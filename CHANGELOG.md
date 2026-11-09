@@ -66,6 +66,11 @@ configured.
   Plex, seasons included - the whole programme for just this title. Shows up
   in the run protocol as "Title refresh". The "all" button in the top bar
   still only pushes.
+- **Python 3.15.** The image is built on `python:3.15-slim` instead of
+  3.12, and the tests run on the same interpreter. Dependencies updated
+  (certifi, python-dateutil 4, tzdata); `six` is no longer shipped - nothing
+  needs it any more. The GitHub Actions in the workflows moved to their
+  Node 24 releases.
 
 ### Added
 - `TRUSTED_PROXIES`: behind a reverse proxy, the login rate limit and the

@@ -24,7 +24,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 import requests
-from croniter import croniter
+from croniter import CroniterBadDateError, croniter
 from flask import Flask, abort, g, jsonify, request, send_file, render_template, url_for
 from PIL import Image
 
@@ -187,6 +187,31 @@ POSTER_WORKERS = 4
 # (default), then only via the buttons in the UI. E.g. "0 * * * *" for
 # hourly, "0 3 * * *" for daily at 3 AM. Replaces the earlier
 # AUTO_SYNC_INTERVAL_MINUTES (fixed-minute interval since container start).
+def _resolve_cron(expression: str) -> str | None:
+    """The schedule the autopilot actually runs on. A day that never exists
+    in the given months - "0 0 30 2 *", the 30th of February - is a valid
+    expression that never fires; it is read as the last day of the month
+    ("L") instead, which is what was meant. Schedules that do fire are left
+    exactly as written: "0 0 31 * *" keeps skipping the shorter months, as
+    cron defines it. None if there is no run at all."""
+    def fires(candidate: str) -> bool:
+        try:
+            croniter(candidate, datetime.datetime.now()).get_next(datetime.datetime)
+            return True
+        except CroniterBadDateError:
+            return False
+
+    if fires(expression):
+        return expression
+    fields = expression.split()
+    if len(fields) >= 5 and fields[2] != "L":
+        fields[2] = "L"  # day of month
+        last_day = " ".join(fields)
+        if croniter.is_valid(last_day) and fires(last_day):
+            return last_day
+    return None
+
+
 AUTO_SYNC_CRON = os.environ.get("AUTO_SYNC_CRON", "").strip()
 if AUTO_SYNC_CRON in ("", "0"):
     AUTO_SYNC_CRON = None
@@ -194,6 +219,14 @@ elif not croniter.is_valid(AUTO_SYNC_CRON):
     log_config.error("Invalid AUTO_SYNC_CRON=%r (not a valid 5-field cron expression) - autopilot disabled.",
                      AUTO_SYNC_CRON)
     AUTO_SYNC_CRON = None
+else:
+    _configured_cron = AUTO_SYNC_CRON
+    AUTO_SYNC_CRON = _resolve_cron(_configured_cron)
+    if AUTO_SYNC_CRON is None:
+        log_config.error("AUTO_SYNC_CRON=%r never runs - autopilot disabled.", _configured_cron)
+    elif AUTO_SYNC_CRON != _configured_cron:
+        log_config.warning("AUTO_SYNC_CRON=%r names a day that doesn't exist in those months and would never "
+                           "run - using the last day of the month instead: %r.", _configured_cron, AUTO_SYNC_CRON)
 # Minimum gap between two sitemap fetches (manual or automatic), so
 # isitwokeornot.com isn't overloaded by spam clicks or a too-tight cron
 # schedule.

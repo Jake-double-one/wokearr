@@ -3,6 +3,22 @@
 All notable changes to Wokearr, newest first. Version numbers match the image
 tags on `ghcr.io/jake-double-one/wokearr`.
 
+## [Unreleased]
+
+### Changed
+- **A schedule on a day that doesn't exist now runs on the last day of the
+  month.** `AUTO_SYNC_CRON="0 0 30 2 *"` - the 30th of February - was
+  accepted as valid, but there was never a next run to compute. Wokearr now
+  reads such a schedule as `0 0 L 2 *` (28 or 29 February) and says so in
+  the log. Only schedules that would never run are touched: `0 0 31 * *`
+  keeps skipping the shorter months, as cron defines it - write `L` for
+  "last day of every month".
+- Dependencies updated: gunicorn 27, croniter 7, click 8.5.1. One thing to
+  know about croniter 7: a field that starts at its maximum with a step -
+  `59/15`, `23/6` - now means just that one value; it used to be read like
+  `*/15`. Ordinary schedules (`0 * * * *`, `*/15 * * * *`, `0 7-23 * * *`)
+  run at exactly the same times as before.
+
 ## [v0.6.0] – 2026-11-09
 
 ### Security

@@ -87,7 +87,7 @@ reicht in Portainer **Stacks -> wokearr -> Pull and redeploy** (zieht das
 | `BADGE_WIDTH_PERCENT` | nein  | `20`            | Breite der Badge relativ zur Posterbreite, in Prozent. Mindestwert fest bei `20` verankert (kleinere Werte werden automatisch angehoben) |
 | `BADGE_COLOR_SCHEME` | nein  | `standard`      | Palette für die fünf Stufen: `standard` (wie isitwokeornot.com selbst) \| `modified` (grün/gelb/orange/rot/violett) |
 | `RUN_HISTORY_RETENTION` | nein | `4w`         | Aufbewahrung der Protokoll-Einträge: `<Zahl><Einheit>` mit `d`/`w`/`m`, z. B. `3d`, `4w`, `6m`. `0` behält alles |
-| `AUTO_SYNC_CRON` | nein | leer (aus) | Cron-Ausdruck (5 Felder) für den kompletten Autopilot-Lauf (Score-Sync, Poster-Cache, aufräumen, automatisch anwenden), ausgewertet in `TZ`. Leer oder `0` deaktiviert. Z. B. `0 * * * *` für stündlich. |
+| `AUTO_SYNC_CRON` | nein | leer (aus) | Cron-Ausdruck (5 Felder) für den kompletten Autopilot-Lauf (Score-Sync, Poster-Cache, aufräumen, automatisch anwenden), ausgewertet in `TZ`. Leer oder `0` deaktiviert. Z. B. `0 * * * *` für stündlich; `L` als Tag steht für den letzten Tag des Monats (`0 3 L * *`). Ein Tag, den es in den angegebenen Monaten nicht gibt (`0 0 30 2 *`), wird als `L` gelesen. |
 | `TZ` | nein | `Etc/UTC` | Zeitzone für die Log-Zeiten **und** den `AUTO_SYNC_CRON`-Zeitplan, z. B. `Europe/Berlin`. Ohne sie bedeutet `0 7-23 * * *` 7–23 Uhr UTC, nicht eure Ortszeit |
 | `CACHE_REBUILD_COOLDOWN_MINUTES` | nein | `5` | Mindestabstand zwischen zwei Sitemap-Abrufen (manuell oder automatisch) |
 | `CLEANUP_OLD_POSTERS` | nein | `true` | Nach jedem Übertragen automatisch ältere, selbst hochgeladene Poster-Versionen in Plex löschen (siehe unten) |

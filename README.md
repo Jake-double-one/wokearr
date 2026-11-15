@@ -86,7 +86,7 @@ e.g. to `:v0.1.0`.
 | `BADGE_WIDTH_PERCENT` | no  | `20`            | Badge width relative to poster width, in percent. Hard-floored at `20` (lower values are automatically raised) |
 | `BADGE_COLOR_SCHEME` | no  | `standard`      | Palette for the five score bands: `standard` (as used by isitwokeornot.com) \| `modified` (green/yellow/orange/red/violet) |
 | `RUN_HISTORY_RETENTION` | no | `4w`          | How long run-protocol entries are kept: `<number><unit>` with `d`/`w`/`m`, e.g. `3d`, `4w`, `6m`. `0` keeps everything |
-| `AUTO_SYNC_CRON` | no | empty (off) | 5-field cron expression for the full autopilot run (score sync, poster cache, cleanup, auto-push), evaluated in `TZ`. Empty or `0` disables it. E.g. `0 * * * *` for hourly. |
+| `AUTO_SYNC_CRON` | no | empty (off) | 5-field cron expression for the full autopilot run (score sync, poster cache, cleanup, auto-push), evaluated in `TZ`. Empty or `0` disables it. E.g. `0 * * * *` for hourly; `L` as the day means the last day of the month (`0 3 L * *`). A day that doesn't exist in the given months (`0 0 30 2 *`) is read as `L`. |
 | `TZ` | no | `Etc/UTC` | Time zone for log times **and** the `AUTO_SYNC_CRON` schedule, e.g. `Europe/Berlin`. Without it, `0 7-23 * * *` means 7-23 o'clock UTC, not your local time |
 | `CACHE_REBUILD_COOLDOWN_MINUTES` | no | `5` | Minimum gap between two sitemap fetches (manual or automatic) |
 | `CLEANUP_OLD_POSTERS` | no | `true` | After every push, automatically delete older, self-uploaded poster versions in Plex (see below) |

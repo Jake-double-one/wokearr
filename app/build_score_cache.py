@@ -18,6 +18,7 @@ Normal (non-full) runs use the sitemap's <lastmod> to only re-fetch
 new/changed reviews (see build_cache) - agreed with the operator, to keep
 repeated runs lean.
 """
+import datetime
 import json
 import re
 import time
@@ -38,7 +39,8 @@ DATA_DIR = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent / "data")))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 CACHE_FILE = DATA_DIR / "score_cache.json"
 URL_STATE_FILE = DATA_DIR / "url_state.json"
-FAILED_RETRY_DAYS = 7     # how long a URL that yielded no score is left alone
+FAILED_RETRY_DAYS = 7     # how long a URL that yielded no score is left alone at most
+FAILED_RETRY_MIN_SECONDS = 3600  # ... and at least; the pause doubles from here, see _retry_pause
 SLEEP_SECONDS = 0.3       # pause between requests per worker
 MAX_WORKERS = 4           # parallel requests - higher = faster, but less polite
 SITEMAP_URL = "https://isitwokeornot.com/sitemaps/titles-1.xml"
@@ -242,8 +244,58 @@ def extract_one(url: str, lastmod: str | None) -> tuple[dict | None, str]:
         time.sleep(SLEEP_SECONDS)
 
 
+def _lastmod_timestamp(lastmod) -> float | None:
+    """The sitemap's <lastmod> ("2026-01-31T12:00:00.000Z" or just a date) as
+    a Unix timestamp, None if it can't be read."""
+    if not isinstance(lastmod, str):
+        return None
+    try:
+        moment = datetime.datetime.fromisoformat(lastmod.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=datetime.timezone.utc)
+    return moment.timestamp()
+
+
+def _is_transient(status) -> bool:
+    """A failure that says nothing about the page itself: the request didn't
+    get through, or the server was busy."""
+    return status == "request_error" or status in ("http_408", "http_429") or str(status).startswith("http_5")
+
+
+def _failing_since(record: dict) -> float | None:
+    """When the trouble with this URL began. Records written before
+    "failed_since" existed don't say: for a page-related status it can't be
+    earlier than the page's last change, and a transient failure is treated
+    as fresh - a glitch during one run shouldn't cost a week."""
+    since = record.get("failed_since")
+    if isinstance(since, (int, float)):
+        return since
+    if _is_transient(record.get("status")):
+        return record.get("checked") or 0
+    return _lastmod_timestamp(record.get("lastmod"))
+
+
+def _retry_pause(record: dict) -> float:
+    """Seconds to leave a URL alone after a fetch without a usable score.
+
+    As long as the trouble is recent, the next attempt comes soon and the
+    pause doubles from there: a review page fetched in its first minutes -
+    published, but its TMDb link not there yet - is picked up an hour later
+    instead of a week later. What has been failing for long is only looked
+    at every FAILED_RETRY_DAYS days, as before."""
+    longest = FAILED_RETRY_DAYS * 86400
+    since = _failing_since(record)
+    if since is None:
+        return longest
+    failing_for = (record.get("checked") or 0) - since
+    return min(longest, max(FAILED_RETRY_MIN_SECONDS, failing_for))
+
+
 def load_url_state() -> dict:
-    """Per-URL record of the last fetch attempt: {url: {lastmod, status, checked}}."""
+    """Per-URL record of the last fetch attempt: {url: {lastmod, status,
+    checked}}, plus failed_since while the URL yields no usable score."""
     if not URL_STATE_FILE.exists():
         return {}
     try:
@@ -280,8 +332,11 @@ def build_cache(cache: dict, on_progress=None, skip_existing: bool = True,
     entries: a page that yields no usable score (no Review block, no TMDb ID,
     an HTTP error, or a second review page for a TMDb ID we already have)
     never lands in the cache, and would otherwise count as "new" and be
-    re-fetched on every single run, forever. Such URLs are retried at most
-    every FAILED_RETRY_DAYS days, so a temporary glitch still heals itself.
+    re-fetched on every single run, forever. Such URLs are retried with a
+    growing pause - an hour at first, doubling up to FAILED_RETRY_DAYS days
+    (see _retry_pause) - so a temporary glitch or a page that wasn't
+    complete yet heals itself quickly, while a page that never yields a
+    score costs one request a week.
 
     on_progress(done, total) is called after each processed title (total
     only counts the URLs actually being fetched, not the skipped ones).
@@ -319,7 +374,7 @@ def build_cache(cache: dict, on_progress=None, skip_existing: bool = True,
             else:
                 if record.get("status") != "ok":
                     checked = record.get("checked") or 0
-                    if now - checked >= FAILED_RETRY_DAYS * 86400:
+                    if now - checked >= _retry_pause(record):
                         return True
                 known_lastmod = record.get("lastmod")
             if lastmod is None or known_lastmod is None:
@@ -366,13 +421,21 @@ def build_cache(cache: dict, on_progress=None, skip_existing: bool = True,
         if status != "ok":
             unresolved[status] = unresolved.get(status, 0) + 1
             log.debug("No usable score (%s): %s", status, url)
-        url_state[url] = {"lastmod": lastmod, "status": status, "checked": now}
+        record = {"lastmod": lastmod, "status": status, "checked": now}
+        if status != "ok":
+            # Still the same trouble as last time? Then it began back then
+            previous = url_state.get(url) or {}
+            began = None
+            if previous.get("status") not in (None, "ok") and previous.get("lastmod") == lastmod:
+                began = _failing_since(previous)
+            record["failed_since"] = now if began is None else min(began, now)
+        url_state[url] = record
 
     if entries:
         save_url_state(url_state)
     if unresolved:
         summary = ", ".join(f"{count}x {status}" for status, count in sorted(unresolved.items()))
-        log.info("%d URLs without a usable score (%s) - retried in %d days at the earliest.",
+        log.info("%d URLs without a usable score (%s) - retried with a growing pause, every %d days at most.",
                  sum(unresolved.values()), summary, FAILED_RETRY_DAYS)
 
     return cache, done

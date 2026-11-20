@@ -19,6 +19,17 @@ tags on `ghcr.io/jake-double-one/wokearr`.
   `*/15`. Ordinary schedules (`0 * * * *`, `*/15 * * * *`, `0 7-23 * * *`)
   run at exactly the same times as before.
 
+### Fixed
+- **A review that wasn't complete when it was first fetched stayed unknown
+  for a week.** The autopilot can reach a new review page within minutes of
+  its publication, before the page carries its TMDb link. Such a page was
+  then left alone for seven days, so the title had a score on
+  isitwokeornot.com but no badge in Plex. A page without a usable score is
+  now tried again after an hour, then with a doubling pause up to the
+  previous seven days. The same goes for pages that failed only because the
+  site didn't answer during one run. Titles affected before this update are
+  picked up on the next run, without a full rebuild.
+
 ## [v0.6.0] – 2026-11-09
 
 ### Security

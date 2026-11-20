@@ -160,7 +160,7 @@ whose score value actually changed; only those trigger a notification.
 A failed run names the stage and the reason in plain words, e.g. "Score
 database failed: isitwokeornot.com not responding (timeout)", and is shown in
 red. Rows with more to tell can be expanded (tap or click): which of your
-titles got a new score (`Barbie: 72 → 81`), which were badged for the first
+titles got a new score (`Example Movie: 72 → 81`), which were badged for the first
 time, and the raw error message. The full technical details, including the
 traceback, are in the [container log](#container-log).
 

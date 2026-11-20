@@ -163,7 +163,7 @@ Ein fehlgeschlagener Lauf nennt Stufe und Ursache im Klartext, z. B.
 „Score-Datenbank fehlgeschlagen: isitwokeornot.com antwortet nicht
 (Zeitüberschreitung)", und erscheint rot. Zeilen mit mehr Inhalt lassen sich
 aufklappen (antippen oder anklicken): welche eurer Titel einen neuen Score
-haben (`Barbie: 72 → 81`), welche erstmals ein Badge bekommen haben, und die
+haben (`Example Movie: 72 → 81`), welche erstmals ein Badge bekommen haben, und die
 technische Fehlermeldung. Alle Details inklusive Traceback stehen im
 [Container-Log](#container-log).
 

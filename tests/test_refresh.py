@@ -90,7 +90,7 @@ def test_a_title_without_agent_poster_uses_its_current_poster(make_app):
     """Plex has no agent artwork for the title (a season, typically): the
     current poster becomes the base - if it isn't one of our badges."""
     wa = make_app(PLEX_URL="http://plex.local:32400", PLEX_TOKEN=TOKEN)
-    season = MagicMock(ratingKey=42, title="Season 4", parentTitle="Lupin", thumb="/library/metadata/42/thumb/1",
+    season = MagicMock(ratingKey=42, title="Season 4", parentTitle="Example Show", thumb="/library/metadata/42/thumb/1",
                        posters=lambda: [])
     with patch.object(wa, "_plex_get", return_value=_jpeg(marker=False)):
         data, found = wa.fetch_original_poster_bytes(MagicMock(), season)
@@ -100,7 +100,7 @@ def test_a_title_without_agent_poster_uses_its_current_poster(make_app):
 
 def test_a_title_whose_only_poster_is_our_badge_is_skipped_without_failing_the_run(make_app):
     wa = make_app(PLEX_URL="http://plex.local:32400", PLEX_TOKEN=TOKEN)
-    season = MagicMock(ratingKey=43, title="Season 5", parentTitle="Lupin", thumb="/library/metadata/43/thumb/1",
+    season = MagicMock(ratingKey=43, title="Season 5", parentTitle="Example Show", thumb="/library/metadata/43/thumb/1",
                        posters=lambda: [])
     with patch.object(wa, "_plex_get", return_value=_jpeg(marker=True)):
         assert wa.fetch_original_poster_bytes(MagicMock(), season) == (None, False)
@@ -115,13 +115,13 @@ def test_a_title_whose_only_poster_is_our_badge_is_skipped_without_failing_the_r
             pass
         else:
             raise AssertionError("expected NoOriginalPoster")
-    show = MagicMock(ratingKey=7, title="Lupin", guids=[MagicMock(id="tmdb://1")], parentTitle=None,
+    show = MagicMock(ratingKey=7, title="Example Show", guids=[MagicMock(id="tmdb://1")], parentTitle=None,
                      seasons=lambda: [season])
     section = MagicMock(type="show")
     section.all.return_value = [show]
     plex = MagicMock()
     plex.library.section.return_value = section
-    wa.CACHE_FILE.write_text(json.dumps({"tv:1": {"title": "Lupin", "score": 50, "url": "https://isitwokeornot.com/tv/l"}}),
+    wa.CACHE_FILE.write_text(json.dumps({"tv:1": {"title": "Example Show", "score": 50, "url": "https://isitwokeornot.com/tv/l"}}),
                              encoding="utf-8")
     (wa.ORIGINALS_DIR / "7.jpg").write_bytes(_jpeg(marker=False))
     with patch.object(wa, "get_plex", return_value=plex), patch.object(wa, "_plex_get", return_value=_jpeg(marker=True)), \

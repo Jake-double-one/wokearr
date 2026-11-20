@@ -3,7 +3,7 @@
 All notable changes to Wokearr, newest first. Version numbers match the image
 tags on `ghcr.io/jake-double-one/wokearr`.
 
-## [Unreleased]
+## [v0.6.1] – 2026-11-20
 
 ### Changed
 - **A schedule on a day that doesn't exist now runs on the last day of the
@@ -29,6 +29,10 @@ tags on `ghcr.io/jake-double-one/wokearr`.
   previous seven days. The same goes for pages that failed only because the
   site didn't answer during one run. Titles affected before this update are
   picked up on the next run, without a full rebuild.
+
+### Upgrade note
+Nothing to do - pull the new image. Titles that were missed are picked up
+by the next autopilot run on their own.
 
 ## [v0.6.0] – 2026-11-09
 
@@ -481,6 +485,7 @@ Note: the tag `v0.2` points at the same commit as `v0.2.2` – an accidental
 duplicate, not a separate release.
 
 [Unreleased]: https://github.com/Jake-double-one/wokearr/compare/v0.5.0...main
+[v0.6.1]: https://github.com/Jake-double-one/wokearr/compare/v0.6.0...v0.6.1
 [v0.6.0]: https://github.com/Jake-double-one/wokearr/compare/v0.5.0...v0.6.0
 [v0.5.0]: https://github.com/Jake-double-one/wokearr/compare/v0.4.1...v0.5.0
 [v0.4.1]: https://github.com/Jake-double-one/wokearr/compare/v0.4.0...v0.4.1

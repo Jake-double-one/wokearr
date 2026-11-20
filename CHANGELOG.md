@@ -248,7 +248,7 @@ the startup log warns about that combination.
   The").
 - **Next autopilot run** shown in the footer.
 - **Score changes by name**: the protocol counts how many of your titles got
-  a new score, and lists them when a row is expanded (`Barbie: 72 → 81`),
+  a new score, and lists them when a row is expanded (`Example Movie: 72 → 81`),
   along with titles badged for the first time. The container log lists every
   change isitwokeornot.com made.
 - `TZ` for log times and the cron schedule, `LOG_LEVEL` for the detail of the

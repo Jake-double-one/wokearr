@@ -44,12 +44,12 @@ def test_unresolvable_pages_are_not_refetched_every_run(bsc):
 
 
 def test_score_changes_reported(bsc):
-    cache = {"movie:1": {"title": "Barbie", "score": 72, "url": "https://isitwokeornot.com/movie/barbie", "lastmod": "a"}}
+    cache = {"movie:1": {"title": "Example Movie", "score": 72, "url": "https://isitwokeornot.com/movie/example-movie", "lastmod": "a"}}
     changes = []
-    with patch.object(bsc, "get_title_urls", return_value=[("https://isitwokeornot.com/movie/barbie", "b")]), \
-         patch.object(bsc, "extract_one", side_effect=lambda u, lm: _result(u, lm, "movie:1", "Barbie", 81)):
+    with patch.object(bsc, "get_title_urls", return_value=[("https://isitwokeornot.com/movie/example-movie", "b")]), \
+         patch.object(bsc, "extract_one", side_effect=lambda u, lm: _result(u, lm, "movie:1", "Example Movie", 81)):
         bsc.build_cache(cache, changes=changes)
-    assert changes == [{"key": "movie:1", "title": "Barbie", "old": 72, "new": 81}]
+    assert changes == [{"key": "movie:1", "title": "Example Movie", "old": 72, "new": 81}]
 
 
 def test_sitemap_retry_then_error(bsc):

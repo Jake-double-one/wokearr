@@ -131,6 +131,7 @@ Wrong: `https://192.168.1.10`, `192.168.1.10:32400` (no scheme), `http://192.168
 The `/data` volume holds and survives container restarts/updates:
 `score_cache.json` (score database), `originals/` (unbadged posters),
 `branded/` (fully rendered posters, not necessarily uploaded yet),
+`thumbs/` (small versions of the originals for the web UI; can be deleted at any time),
 `rendered_state.json`/`pushed_state.json` (track, per title, which score and
 badge settings were last rendered and last uploaded to Plex),
 `run_history.json` (the run protocol shown in the footer),

@@ -17,7 +17,7 @@ DATA_DIR="${DATA_DIR:-/data}"
 # What Wokearr itself keeps in /data. Only these are handed over - never the
 # whole mount, so a folder mounted there by mistake (a media drive, a backup)
 # keeps its owners.
-KNOWN_PATHS="score_cache.json url_state.json rendered_state.json pushed_state.json library_index.json run_history.json session_secret originals branded"
+KNOWN_PATHS="score_cache.json url_state.json rendered_state.json pushed_state.json library_index.json run_history.json session_secret originals branded thumbs"
 
 log() {
     # Same layout as Wokearr's own log lines; one call per line

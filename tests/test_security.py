@@ -357,6 +357,7 @@ def test_jobs_run_one_at_a_time_and_a_flood_is_refused(make_app):
 def test_orphan_cleanup_waits_when_a_library_could_not_be_read(make_app):
     wa = make_app(PLEX_URL="http://plex.local:32400", PLEX_TOKEN=TOKEN, LIBRARY_SECTIONS="Filme,Serien")
     (wa.ORIGINALS_DIR / "999.jpg").write_bytes(b"old")
+    (wa.THUMBS_DIR / "999.jpg").write_bytes(b"small")
     movie = MagicMock(ratingKey=1, title="A", guids=[MagicMock(id="tmdb://1")])
     movies = MagicMock(type="movie"); movies.all.return_value = [movie]
 
@@ -370,7 +371,9 @@ def test_orphan_cleanup_waits_when_a_library_could_not_be_read(make_app):
     with patch.object(wa, "get_plex", return_value=plex):
         stats = wa.sync_library()
     assert stats["orphans_removed"] == 0 and (wa.ORIGINALS_DIR / "999.jpg").exists()
+    assert (wa.THUMBS_DIR / "999.jpg").exists()
     plex.library.section.side_effect = lambda name: movies
     with patch.object(wa, "get_plex", return_value=plex):
         stats = wa.sync_library()
     assert stats["orphans_removed"] == 1 and not (wa.ORIGINALS_DIR / "999.jpg").exists()
+    assert not (wa.THUMBS_DIR / "999.jpg").exists()   # the thumbnail goes with its original, uncounted

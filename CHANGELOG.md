@@ -3,6 +3,23 @@
 All notable changes to Wokearr, newest first. Version numbers match the image
 tags on `ghcr.io/jake-double-one/wokearr`.
 
+## [Unreleased]
+
+### Changed
+- **Posters in the web UI load once and stay.** Until now the browser was
+  told to keep nothing, so every visit - and every change of filter or
+  sorting - fetched every poster again, in full size. Now:
+  - the grid gets **small versions** of the posters (400 px wide, a
+    fraction of the original's size), made on first use and kept in
+    `/data/thumbs/` - a pure cache that can be deleted at any time;
+  - the browser **keeps them**: each poster's address carries a version
+    that changes when the poster does, so nothing is fetched twice and an
+    outdated poster is never shown.
+
+  In a test with 60 titles a visit dropped from 23 MB to 4 MB the first
+  time and to nothing after that. The images are marked private, so a
+  proxy in between doesn't store them.
+
 ## [v0.6.1] – 2026-11-20
 
 ### Changed

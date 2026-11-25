@@ -132,6 +132,7 @@ Falsch: `https://192.168.1.10`, `192.168.1.10:32400` (ohne Schema), `http://192.
 Im Volume `/data` liegen und überstehen Container-Neustarts/-Updates:
 `score_cache.json` (Score-Datenbank), `originals/` (unbebadgte Poster),
 `branded/` (fertig gerenderte Poster, noch nicht zwingend hochgeladen),
+`thumbs/` (verkleinerte Originale für die Weboberfläche; jederzeit löschbar),
 `rendered_state.json`/`pushed_state.json` (merken sich pro Titel, mit
 welchem Score und welchen Badge-Einstellungen zuletzt gerendert bzw. zu Plex
 hochgeladen wurde), `run_history.json` (das Protokoll im Footer),

@@ -25,8 +25,8 @@ from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 import requests
 from croniter import CroniterBadDateError, croniter
-from flask import Flask, abort, g, jsonify, request, send_file, render_template, url_for
-from PIL import Image
+from flask import Flask, Response, abort, g, jsonify, request, render_template, url_for
+from PIL import Image, ImageOps
 
 from badge import (  # noqa: E402
     add_badge,
@@ -268,6 +268,18 @@ ORIGINALS_DIR.mkdir(parents=True, exist_ok=True)
 # render_branded_image/push_to_plex).
 BRANDED_DIR = DATA_DIR / "branded"
 BRANDED_DIR.mkdir(parents=True, exist_ok=True)
+# Small versions of the originals for the grid in the web UI: an original is
+# 100 KB - 2 MB, a tile is a few hundred pixels wide. Made on first request,
+# renewed when the original changes, removed with it. Purely a cache - the
+# folder can be deleted at any time. (After changing the width or quality,
+# delete it: an existing thumbnail is only compared against its original.)
+THUMBS_DIR = DATA_DIR / "thumbs"
+POSTER_THUMB_WIDTH = 400   # px - sharp on a phone's three-column grid at 3x
+POSTER_THUMB_QUALITY = 80
+try:
+    THUMBS_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    pass  # read-only /data: thumbnails are then made per request, see _poster_thumbnail
 # Tracks, per ratingKey, which score was last rendered/uploaded to Plex - so
 # the autopilot recognizes new/changed titles without re-rendering/
 # re-uploading everything every time. Stored as [score, badge fingerprint]
@@ -1133,6 +1145,13 @@ def sync_library(log=None) -> dict:
                         log_plex.debug("Removed orphan: %s/%s", folder.name, f.name)
                     except OSError as e:
                         log_plex.warning("Could not remove orphan %s/%s: %s", folder.name, f.name, e)
+        # Thumbnails go with their original - not counted, they aren't posters of their own
+        for f in THUMBS_DIR.glob("*.jpg"):
+            if not (ORIGINALS_DIR / f.name).exists():
+                try:
+                    f.unlink()
+                except OSError as e:
+                    log_plex.debug("Could not remove thumbnail %s: %s", f.name, e)
         if removed:
             _emit(log, log_plex, "sync.orphans_removed", count=removed)
     else:
@@ -1611,6 +1630,84 @@ def _invalidate_library_cache() -> None:
         _library_cache["items"] = None
 
 
+def _poster_version(rating_key) -> str | None:
+    """Changes whenever the cached original of this title changes - part of
+    the poster URL the grid uses, so a browser may keep the image for good
+    and still never shows an outdated one. None without a cached original."""
+    try:
+        stat = (ORIGINALS_DIR / f"{rating_key}.jpg").stat()
+    except OSError:
+        return None
+    return f"{stat.st_mtime_ns:x}-{stat.st_size:x}-{POSTER_THUMB_WIDTH}"
+
+
+def _shrink_poster(data: bytes) -> bytes:
+    """The poster as a JPEG POSTER_THUMB_WIDTH pixels wide. Raises if the
+    bytes aren't an image Pillow can read."""
+    with Image.open(io.BytesIO(data)) as im:
+        im.draft("RGB", (POSTER_THUMB_WIDTH, POSTER_THUMB_WIDTH * 3))  # JPEG: decode at reduced size
+        im = ImageOps.exif_transpose(im)
+        if im.mode != "RGB":
+            im = im.convert("RGB")
+        if im.width > POSTER_THUMB_WIDTH:
+            height = max(1, round(im.height * POSTER_THUMB_WIDTH / im.width))
+            im = im.resize((POSTER_THUMB_WIDTH, height), Image.LANCZOS)
+        out = io.BytesIO()
+        im.save(out, "JPEG", quality=POSTER_THUMB_QUALITY, optimize=True, progressive=True)
+        return out.getvalue()
+
+
+def _poster_thumbnail(rating_key: str, original: Path) -> bytes:
+    """The grid's small version of a cached original, from THUMBS_DIR if it
+    is still current (it carries its original's modification time), made
+    and stored otherwise. An original Pillow can't read is passed on as it
+    is; a folder that can't be written just means no stored copy."""
+    stat = original.stat()
+    thumb = THUMBS_DIR / f"{rating_key}.jpg"
+    try:
+        if thumb.stat().st_mtime_ns == stat.st_mtime_ns:
+            return thumb.read_bytes()
+    except OSError:
+        pass
+    data = original.read_bytes()
+    try:
+        small = _shrink_poster(data)
+    except Exception as e:
+        log_plex.debug("No thumbnail for %s (%s) - serving the original.", original.name, _describe(e))
+        return data
+    # Written next to its final place and moved there in one step, so a
+    # request arriving meanwhile never reads half a file
+    tmp = thumb.with_name(f".{thumb.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        tmp.write_bytes(small)
+        os.utime(tmp, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+        os.replace(tmp, thumb)
+    except OSError as e:
+        log_plex.debug("Could not store the thumbnail for %s: %s", original.name, e)
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+    return small
+
+
+def _poster_response(data: bytes, version: str | None, max_age: int | None = None) -> Response:
+    """A poster for the browser to keep. Requested under its current version
+    (?v=, see _poster_version) it never has to be asked for again: when the
+    poster changes, so does the URL. Otherwise the browser keeps it but asks
+    each time whether it is still current - answered with an empty 304
+    unless it changed. "private": behind a login, not for shared caches."""
+    resp = Response(data, mimetype="image/jpeg")
+    resp.set_etag(version or hashlib.sha256(data).hexdigest()[:32])
+    if version and request.args.get("v") == version:
+        resp.headers["Cache-Control"] = "private, max-age=31536000, immutable"
+    elif max_age:
+        resp.headers["Cache-Control"] = f"private, max-age={max_age}"
+    else:
+        resp.headers["Cache-Control"] = "private, no-cache"
+    return resp.make_conditional(request)
+
+
 @app.route("/api/library")
 def api_library():
     if demo_mode():
@@ -1640,6 +1737,7 @@ def api_library():
             "score": entry["score"],
             "type": "movie" if prefix == "movie" else "show",
             "sourceUrl": _with_utm(entry.get("url")),
+            "posterVersion": _poster_version(it.ratingKey),
         })
     with _library_cache_lock:
         _library_cache.update(at=time.time(), items=items)
@@ -1656,30 +1754,34 @@ def api_poster(rating_key):
     Plex's current poster if no original is cached yet for this title (e.g.
     before the first "Sync Now").
 
-    Explicitly not cacheable (Cache-Control: no-store), since the file can
-    change at any time via sync/autopilot while the URL itself stays the same.
+    Sent as a small version (see _poster_thumbnail) the browser may keep:
+    the grid asks for it under the original's current version, so the file
+    can change at any time via sync/autopilot and the grid still never
+    shows an old one (see _poster_response).
     """
     demo = next((d for d in DEMO_ITEMS if d["ratingKey"] == rating_key), None)
     if demo:
         img = bsc.read_capped(requests.get(demo["poster"], timeout=15, stream=True), MAX_IMAGE_BYTES)
-        resp = send_file(io.BytesIO(img), mimetype="image/jpeg")
-        resp.headers["Cache-Control"] = "no-store"
-        return resp
+        return _poster_response(img, None, max_age=86400)
 
     cached = ORIGINALS_DIR / f"{rating_key}.jpg"
-    if cached.exists():
-        resp = send_file(cached, mimetype="image/jpeg")
-        resp.headers["Cache-Control"] = "no-store"
-        return resp
+    version = _poster_version(rating_key)
+    if version:
+        try:
+            return _poster_response(_poster_thumbnail(rating_key, cached), version)
+        except OSError:
+            pass  # removed in this very moment (orphan cleanup) - as if it had never been cached
 
     if not rating_key.isdigit():
         abort(404)
     plex = get_plex()
     item = plex.fetchItem(int(rating_key))
     img = _plex_get(plex, item.thumb, timeout=15)
-    resp = send_file(io.BytesIO(img), mimetype="image/jpeg")
-    resp.headers["Cache-Control"] = "no-store"
-    return resp
+    try:
+        img = _shrink_poster(img)
+    except Exception:
+        pass  # not an image Pillow reads - the browser gets what Plex sent
+    return _poster_response(img, None)
 
 
 # Which logger a failed manual job is reported under, by stage

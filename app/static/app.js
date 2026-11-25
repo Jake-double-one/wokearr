@@ -127,8 +127,11 @@ function render() {
     card.className = "card";
     const sourceUrl = item.sourceUrl || "https://isitwokeornot.com/";
     const key = encodeURIComponent(item.ratingKey);
+    // The version changes with the poster, so the browser can keep each
+    // image for good instead of fetching it again on every visit
+    const version = item.posterVersion ? `?v=${encodeURIComponent(item.posterVersion)}` : "";
     card.innerHTML = `
-      <img src="/api/poster/${key}" alt="${escapeHtml(item.title)}" loading="lazy">
+      <img src="/api/poster/${key}${version}" alt="${escapeHtml(item.title)}" loading="lazy" decoding="async">
       <div class="badge badge-${bandClass(band)}">${escapeHtml(scoreLabel(item.score))}</div>
       <div class="card-overlay">
         <div class="card-title">${escapeHtml(item.title)}</div>

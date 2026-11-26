@@ -3,7 +3,7 @@
 All notable changes to Wokearr, newest first. Version numbers match the image
 tags on `ghcr.io/jake-double-one/wokearr`.
 
-## [Unreleased]
+## [v0.7.0] – 2026-11-26
 
 ### Changed
 - **Posters in the web UI load once and stay.** Until now the browser was
@@ -19,6 +19,13 @@ tags on `ghcr.io/jake-double-one/wokearr`.
   In a test with 60 titles a visit dropped from 23 MB to 4 MB the first
   time and to nothing after that. The images are marked private, so a
   proxy in between doesn't store them.
+- Dependencies updated: gunicorn 27.0.1 - when the container stops, a
+  request arriving on an open connection is still answered instead of lost.
+
+### Upgrade note
+Nothing to do - pull the new image. The first visit after the update loads
+the posters once more, in small; from then on they come from the browser's
+own storage. `/data/thumbs/` appears on its own.
 
 ## [v0.6.1] – 2026-11-20
 
@@ -502,6 +509,7 @@ Note: the tag `v0.2` points at the same commit as `v0.2.2` – an accidental
 duplicate, not a separate release.
 
 [Unreleased]: https://github.com/Jake-double-one/wokearr/compare/v0.5.0...main
+[v0.7.0]: https://github.com/Jake-double-one/wokearr/compare/v0.6.1...v0.7.0
 [v0.6.1]: https://github.com/Jake-double-one/wokearr/compare/v0.6.0...v0.6.1
 [v0.6.0]: https://github.com/Jake-double-one/wokearr/compare/v0.5.0...v0.6.0
 [v0.5.0]: https://github.com/Jake-double-one/wokearr/compare/v0.4.1...v0.5.0
